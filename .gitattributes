@@ -1,0 +1,2 @@
+*.26O filter=lfs diff=lfs merge=lfs -text
+*.O filter=lfs diff=lfs merge=lfs -text
