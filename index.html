@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GNSS·ATMO — Atmospheric Moisture Analysis via GPS Satellite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@300;400;500;600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <style>
+    :root {
+      --bg:           #0D0F14;
+      --bg-panel:     #13161E;
+      --bg-panel2:    #181C26;
+      --bg-accent:    #1E2330;
+      --border:       rgba(180,200,255,0.07);
+      --border-hi:    rgba(180,200,255,0.14);
+      --accent:       #D4934A;
+      --accent-light: #F0B060;
+      --accent-pale:  rgba(212,147,74,0.10);
+      --accent-glow:  rgba(212,147,74,0.22);
+      --green:        #3DBF7A;
+      --green-light:  #5CD991;
+      --amber:        #E8B84B;
+      --red:          #E05252;
+      --text:         #E8E2D6;
+      --text-muted:   rgba(220,210,190,0.50);
+      --text-dim:     rgba(220,210,190,0.75);
+      --rule:         rgba(180,200,255,0.08);
+      --font-display: 'Playfair Display', Georgia, serif;
+      --font-mono:    'JetBrains Mono', 'Courier New', monospace;
+      --font-ui:      'Libre Baskerville', Georgia, serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Subtle paper texture overlay */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+      opacity: 0.6;
+    }
+
+    /* Fine horizontal rule accent at top */
+    body::after {
+      content: '';
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent), var(--accent-light), var(--accent), transparent);
+      z-index: 100;
+    }
+
+    .screen { display: none; position: relative; z-index: 1; }
+
+    /* ── LOAD SCREEN ────────────────────────────────────────── */
+    #loadScreen {
+      position: fixed; inset: 0; z-index: 50;
+      flex-direction: column; align-items: center; justify-content: center;
+      background: var(--bg); gap: 28px;
+    }
+
+    .load-brand {
+      font-family: var(--font-display);
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    .load-brand em { font-style: italic; color: var(--accent); }
+
+    .load-rule {
+      width: 80px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+
+    .spinner-wrap { position: relative; width: 56px; height: 56px; }
+    .spinner-ring {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 1.5px solid var(--border);
+      border-top-color: var(--accent);
+      animation: spin 1.1s linear infinite;
+    }
+    .spinner-ring:nth-child(2) {
+      inset: 8px;
+      border-top-color: var(--green);
+      animation-duration: 0.75s;
+      animation-direction: reverse;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .load-txt {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+    }
+    .load-step {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+    }
+    #loadProgress {
+      width: 240px; height: 1px;
+      background: var(--border);
+      overflow: hidden;
+    }
+    #loadBar {
+      height: 100%; width: 0%;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    /* ── ERROR SCREEN ────────────────────────────────────────── */
+    #errScreen {
+      flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100vh; gap: 20px; text-align: center; padding: 40px 20px;
+    }
+    .err-icon {
+      font-family: var(--font-display);
+      font-size: 3rem;
+      color: var(--red);
+      font-style: italic;
+    }
+    #errMsg {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--red);
+      max-width: 360px;
+      line-height: 1.7;
+      opacity: 0.85;
+    }
+
+    /* ── MAIN LAYOUT ────────────────────────────────────────── */
+    #mainScreen { display: none; }
+    .app { max-width: 1240px; margin: 0 auto; padding: 32px 24px 100px; }
+
+    /* ── HEADER ─────────────────────────────────────────────── */
+    .header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 36px; flex-wrap: wrap;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border-hi);
+    }
+
+    .brand-block {}
+    .brand {
+      font-family: var(--font-display);
+      font-size: clamp(1.6rem, 4vw, 2.6rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      line-height: 1;
+    }
+    .brand em { font-style: italic; color: var(--accent); }
+    .brand-sub {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+
+    .hdr-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .coord-line {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--accent);
+      letter-spacing: 0.06em;
+      font-weight: 500;
+    }
+    .coord-meta {
+      font-family: var(--font-mono);
+      font-size: 0.70rem;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+    }
+    .acc-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+    }
+    .acc-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ── SUMMARY CARDS ──────────────────────────────────────── */
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1px;
+      margin-bottom: 32px;
+      border: 1px solid var(--border-hi);
+      background: var(--border-hi);
+    }
+
+    .sum-card {
+      background: var(--bg-panel);
+      padding: 20px 16px;
+      text-align: center;
+    }
+    .sum-label {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .sum-val {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--accent);
+    }
+    .sum-unit {
+      font-family: var(--font-mono);
+      font-size: 0.60rem;
+      color: var(--text-muted);
+      letter-spacing: 0.10em;
+      margin-top: 5px;
+      text-transform: uppercase;
+    }
+
+    /* ── TIME SLIDER ────────────────────────────────────────── */
+    #timeSlider {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      padding: 18px 20px 14px;
+      margin-bottom: 24px;
+      display: flex; flex-direction: column; gap: 10px;
+      position: relative;
+    }
+    .slider-top {
+      display: flex; justify-content: space-between;
+      align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .slider-left { display: flex; align-items: center; gap: 10px; }
+
+    /* Play/Pause button — YouTube-style icon */
+    .btn-play {
+      display: flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px;
+      background: var(--accent);
+      border: none; border-radius: 50%; cursor: pointer;
+      color: var(--bg); font-size: 0; padding: 0;
+      flex-shrink: 0;
+      transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+      box-shadow: 0 0 0 0 var(--accent-glow);
+      position: relative;
+    }
+    /* play triangle */
+    .btn-play::before {
+      content: '';
+      display: block;
+      width: 0; height: 0;
+      border-style: solid;
+      border-width: 6px 0 6px 11px;
+      border-color: transparent transparent transparent var(--bg);
+      margin-left: 2px;
+    }
+    /* pause — two vertical bars via box-shadow trick */
+    .btn-play::after {
+      content: '';
+      display: block;
+      position: absolute;
+      width: 3px; height: 12px;
+      background: var(--bg);
+      border-radius: 1px;
+      box-shadow: 5px 0 0 var(--bg);
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+    .btn-play.is-playing::before { opacity: 0; }
+    .btn-play.is-playing::after  { opacity: 1; }
+    .btn-play:hover {
+      background: var(--accent-light);
+      transform: scale(1.08);
+      box-shadow: 0 0 0 6px var(--accent-glow);
+    }
+    .btn-play:active { transform: scale(0.96); }
+
+    #epochTime {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--text);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+    #epochCounter {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+    }
+
+    /* ── TRACK WRAPPER (YouTube-style) ── */
+    .slider-track-wrap {
+      position: relative;
+      width: 100%;
+      height: 18px;
+      display: flex; align-items: center;
+      cursor: pointer;
+    }
+    /* invisible hit area expands hover zone */
+    .slider-track-wrap::before {
+      content: ''; position: absolute; inset: 0; z-index: 0;
+    }
+
+    .slider-track-bg {
+      position: absolute; left: 0; right: 0; height: 3px;
+      background: rgba(180,200,255,0.12);
+      border-radius: 3px;
+      transition: height 0.18s ease;
+      top: 50%; transform: translateY(-50%);
+      overflow: hidden;
+    }
+    .slider-track-wrap:hover .slider-track-bg,
+    .slider-track-wrap.is-dragging .slider-track-bg {
+      height: 5px;
+    }
+
+    .slider-track-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-light));
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.12s linear;
+      position: relative;
+    }
+    .slider-track-fill::after {
+      content: '';
+      position: absolute; right: -1px; top: -1px; bottom: -1px;
+      width: 3px;
+      background: var(--accent-light);
+      filter: blur(2px);
+      opacity: 0.6;
+    }
+
+    /* The actual range input — invisible but functional */
+    .slider-track-wrap input[type="range"] {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      -webkit-appearance: none; appearance: none;
+      background: transparent; outline: none; border: none;
+      cursor: pointer; margin: 0; padding: 0; z-index: 2;
+      opacity: 0;
+    }
+
+    /* Thumb — shown as a custom overlay circle */
+    .slider-thumb-dot {
+      position: absolute;
+      width: 13px; height: 13px;
+      background: var(--text);
+      border-radius: 50%;
+      top: 50%; transform: translate(-50%, -50%);
+      pointer-events: none; z-index: 3;
+      opacity: 0;
+      transition: opacity 0.18s, width 0.18s, height 0.18s, box-shadow 0.18s;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.5);
+      left: 0%;
+    }
+    .slider-track-wrap:hover .slider-thumb-dot,
+    .slider-track-wrap.is-dragging .slider-thumb-dot {
+      opacity: 1;
+      width: 15px; height: 15px;
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 1px 8px rgba(0,0,0,0.6);
+    }
+    .slider-track-wrap.is-dragging .slider-thumb-dot {
+      width: 17px; height: 17px;
+      background: var(--accent-light);
+    }
+
+    /* Tooltip floating above thumb */
+    .slider-tooltip {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      transform: translateX(-50%);
+      background: rgba(13,15,20,0.95);
+      border: 1px solid var(--border-hi);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.05em;
+      padding: 4px 9px;
+      border-radius: 3px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.18s;
+      z-index: 10;
+      left: 0%;
+    }
+    .slider-tooltip::after {
+      content: '';
+      position: absolute; top: 100%; left: 50%;
+      transform: translateX(-50%);
+      border: 4px solid transparent;
+      border-top-color: var(--border-hi);
+    }
+    .slider-track-wrap:hover .slider-tooltip,
+    .slider-track-wrap.is-dragging .slider-tooltip {
+      opacity: 1;
+    }
+
+    .slider-labels {
+      display: flex; justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      margin-top: 1px;
+    }
+
+    /* ── MAIN GRID ──────────────────────────────────────────── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+      align-items: start;
+    }
+
+    .sky-wrap {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+    }
+    .panel-header {
+      padding: 14px 18px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: baseline; gap: 10px;
+    }
+    .panel-title {
+      font-family: var(--font-display);
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+    .panel-subtitle {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .panel-body { padding: 16px 18px; }
+
+    #skyPlot { width: 100%; display: block; }
+    .sky-legend {
+      display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap;
+    }
+    .sky-leg-item {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+    }
+    .sky-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+    .sats-wrap {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+    }
+    .sat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+      gap: 1px;
+      background: var(--border);
+    }
+
+    .sat-card {
+      background: var(--bg-panel);
+      padding: 14px 12px;
+      position: relative; overflow: hidden;
+      transition: background 0.18s;
+    }
+    .sat-card:hover { background: var(--bg-accent); }
+    .sat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .sat-card.high::before { background: var(--green); }
+    .sat-card.mid::before  { background: var(--amber); }
+    .sat-card.low::before  { background: var(--red); }
+
+    .sat-prn {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 10px;
+      display: flex; align-items: baseline; gap: 5px;
+    }
+    .sat-prn small {
+      font-family: var(--font-mono);
+      font-size: 0.60rem;
+      color: var(--text-muted);
+      font-weight: 400;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+    }
+    .sat-row {
+      display: flex; justify-content: space-between;
+      align-items: baseline; gap: 4px; margin-bottom: 4px;
+    }
+    .sat-key {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .sat-val {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-align: right;
+      color: var(--text);
+    }
+    .sat-card.high .sat-val { color: var(--green); }
+    .sat-card.mid  .sat-val { color: var(--amber); }
+    .sat-card.low  .sat-val { color: var(--red); }
+
+    .hum-bar-wrap { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .hum-bar-head {
+      display: flex; justify-content: space-between;
+      font-family: var(--font-mono); font-size: 0.62rem;
+      color: var(--text-muted); margin-bottom: 5px;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .hum-bar-track {
+      height: 2px; background: var(--border-hi);
+    }
+    .hum-bar-fill {
+      height: 100%; width: 0;
+      transition: width 1.4s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* ── ANALYSIS PANELS ────────────────────────────────────── */
+    .analysis-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .ana-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+    }
+    .ana-rows { padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+    .ana-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .ana-key {
+      font-family: var(--font-mono);
+      font-size: 0.67rem;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .ana-val {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--accent);
+      text-align: right;
+    }
+    .ana-val .u { font-size: 0.62rem; opacity: 0.7; margin-left: 2px; }
+
+    #propDiagram { width: 100%; margin-top: 10px; }
+
+    /* ── QUALITY TABLE ──────────────────────────────────────── */
+    .quality-section {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .q-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.72rem; }
+    .q-table th {
+      color: var(--text-muted);
+      letter-spacing: 0.10em;
+      font-weight: 400;
+      text-transform: uppercase;
+      padding: 9px 14px 10px;
+      border-bottom: 1px solid var(--border-hi);
+      text-align: left;
+      background: var(--bg-accent);
+      font-size: 0.62rem;
+    }
+    .q-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+    .q-table tr:last-child td { border-bottom: none; }
+    .q-table tr:hover td { background: var(--accent-pale); }
+    .q-table .td-prn { font-weight: 600; }
+
+    /* ── BUTTONS ────────────────────────────────────────────── */
+    .btn-primary {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #0D0F14;
+      background: var(--accent);
+      border: none;
+      padding: 10px 22px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-primary:hover { background: var(--accent-light); transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+
+    /* ── SECTION DECORATIVE RULES ───────────────────────────── */
+    .section-rule {
+      display: flex; align-items: center; gap: 12px;
+      margin: 28px 0 16px;
+    }
+    .section-rule-line {
+      flex: 1; height: 1px;
+      background: linear-gradient(90deg, var(--border-hi), transparent);
+    }
+    .section-rule-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    /* ── RESPONSIVE ─────────────────────────────────────────── */
+    @media (max-width: 960px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .analysis-row { grid-template-columns: 1fr 1fr; }
+      .summary-row  { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .analysis-row { grid-template-columns: 1fr; }
+      .summary-row  { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loadScreen" class="screen" style="display:flex;">
+  <div class="load-brand">GNSS<em>·</em>ATMO</div>
+  <div class="load-rule"></div>
+  <div class="spinner-wrap">
+    <div class="spinner-ring"></div>
+    <div class="spinner-ring"></div>
+  </div>
+  <div class="load-txt">Initializing RINEX Engine</div>
+  <div class="load-step" id="loadStep">Starting RINEX worker…</div>
+  <div id="loadProgress">
+    <div id="loadBar"></div>
+  </div>
+</div>
+
+<div id="errScreen" class="screen">
+  <div class="err-icon">!</div>
+  <div id="errMsg">Failed to load RINEX data.</div>
+  <button class="btn-primary" id="errRetry">Retry</button>
+</div>
+
+<div id="mainScreen" class="screen">
+<div class="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="brand-block">
+      <div class="brand">GNSS<em>·</em>ATMO</div>
+      <div class="brand-sub">GPS Atmospheric Moisture Analysis &nbsp;·&nbsp; RINEX 3.03</div>
+    </div>
+    <div class="hdr-right">
+      <div class="coord-line" id="hdrCoords">—</div>
+      <div class="coord-meta" id="hdrAlt">—</div>
+      <div class="acc-badge">
+        <div class="acc-dot"></div>
+        <span id="hdrAcc">RINEX active</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY CARDS -->
+  <div class="summary-row">
+    <div class="sum-card">
+      <div class="sum-label">Visible Satellites</div>
+      <div class="sum-val" id="sumSats">—</div>
+      <div class="sum-unit">in view</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">Surface Humidity</div>
+      <div class="sum-val" id="sumHumMet">—</div>
+      <div class="sum-unit">% RH met.</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">Precipitable Water</div>
+      <div class="sum-val" id="sumPWV">—</div>
+      <div class="sum-unit">mm PWV column</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">Zenith Total Delay</div>
+      <div class="sum-val" id="sumZTD">—</div>
+      <div class="sum-unit">mm ZTD</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">GPS Mean Humidity</div>
+      <div class="sum-val" id="sumHumGPS">—</div>
+      <div class="sum-unit">% satellite avg.</div>
+    </div>
+  </div>
+
+  <!-- TIME SLIDER -->
+  <div id="timeSlider">
+    <div class="slider-top">
+      <div class="slider-left">
+        <button class="btn-play" id="btnPlay" aria-label="Play"></button>
+        <div id="epochTime">—</div>
+      </div>
+      <div id="epochCounter">Epoch — / —</div>
+    </div>
+    <div class="slider-track-wrap" id="sliderWrap">
+      <div class="slider-track-bg">
+        <div class="slider-track-fill" id="sliderFill"></div>
+      </div>
+      <div class="slider-thumb-dot" id="sliderThumb"></div>
+      <div class="slider-tooltip" id="sliderTooltip">—</div>
+      <input type="range" id="epochSlider" min="0" max="1" value="0" step="1">
+    </div>
+    <div class="slider-labels">
+      <span id="sliderStart">—</span>
+      <span id="sliderEnd">—</span>
+    </div>
+  </div>
+
+  <!-- SKY PLOT + SATELLITES -->
+  <div class="section-rule">
+    <div class="section-rule-label">Signal Analysis</div>
+    <div class="section-rule-line"></div>
+  </div>
+
+  <div class="main-grid">
+    <div class="sky-wrap">
+      <div class="panel-header">
+        <div class="panel-title">Sky Plot</div>
+        <div class="panel-subtitle">Azimuth / Elevation</div>
+      </div>
+      <div class="panel-body">
+        <svg id="skyPlot" viewBox="0 0 300 300"></svg>
+        <div class="sky-legend">
+          <div class="sky-leg-item"><div class="sky-dot" style="background:#D4934A;"></div>GPS (G)</div>
+          <div class="sky-leg-item"><div class="sky-dot" style="background:#3DBF7A;"></div>GLONASS (R)</div>
+          <div class="sky-leg-item"><div class="sky-dot" style="background:#E8B84B;"></div>Galileo (E)</div>
+          <div class="sky-leg-item"><div class="sky-dot" style="background:#8B6FD4;"></div>BeiDou (C)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sats-wrap">
+      <div class="panel-header">
+        <div class="panel-title">Satellite Moisture</div>
+        <div class="panel-subtitle">Per-satellite analysis</div>
+      </div>
+      <div class="panel-body" style="padding:0;">
+        <div class="sat-grid" id="satGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANALYSIS PANELS -->
+  <div class="section-rule">
+    <div class="section-rule-label">Tropospheric Model</div>
+    <div class="section-rule-line"></div>
+  </div>
+
+  <div class="analysis-row">
+    <div class="ana-panel">
+      <div class="panel-header">
+        <div class="panel-title">Tropospheric Model</div>
+      </div>
+      <div class="ana-rows">
+        <div class="ana-row"><span class="ana-key">ZTD Zenith</span><span class="ana-val" id="aZTD">—<span class="u">mm</span></span></div>
+        <div class="ana-row"><span class="ana-key">ZHD Dry Air</span><span class="ana-val" id="aZHD">—<span class="u">mm</span></span></div>
+        <div class="ana-row"><span class="ana-key">ZWD Water Vapor</span><span class="ana-val" id="aZWD">—<span class="u">mm</span></span></div>
+        <div class="ana-row"><span class="ana-key">Precipitable Water</span><span class="ana-val" id="aPWV">—<span class="u">mm</span></span></div>
+        <div class="ana-row"><span class="ana-key">Surface Pressure</span><span class="ana-val" id="aPress">—<span class="u">hPa</span></span></div>
+        <div class="ana-row"><span class="ana-key">Surface Temp.</span><span class="ana-val" id="aTemp">—<span class="u">°C</span></span></div>
+        <div class="ana-row"><span class="ana-key">Vapor Pressure</span><span class="ana-val" id="aVapor">—<span class="u">hPa</span></span></div>
+      </div>
+    </div>
+
+    <div class="ana-panel">
+      <div class="panel-header">
+        <div class="panel-title">Signal Propagation</div>
+      </div>
+      <div class="panel-body" style="padding:12px 18px 0;">
+        <svg id="propDiagram" viewBox="0 0 260 160"></svg>
+      </div>
+      <div class="ana-rows">
+        <div class="ana-row"><span class="ana-key">Troposphere Height</span><span class="ana-val">12<span class="u">km</span></span></div>
+        <div class="ana-row"><span class="ana-key">Zenith Path</span><span class="ana-val">12<span class="u">km</span></span></div>
+        <div class="ana-row"><span class="ana-key">Path at 30° elev.</span><span class="ana-val">24<span class="u">km</span></span></div>
+        <div class="ana-row"><span class="ana-key">Path at 10° elev.</span><span class="ana-val">69<span class="u">km</span></span></div>
+        <div class="ana-row"><span class="ana-key">Zenith Map. Factor</span><span class="ana-val">1.00<span class="u">×</span></span></div>
+        <div class="ana-row"><span class="ana-key">10° Elev. Factor</span><span class="ana-val">5.76<span class="u">×</span></span></div>
+      </div>
+    </div>
+
+    <div class="ana-panel">
+      <div class="panel-header">
+        <div class="panel-title">Atmospheric Conditions</div>
+      </div>
+      <div class="ana-rows">
+        <div class="ana-row"><span class="ana-key">Temperature</span><span class="ana-val" id="aMetTemp">—<span class="u">°C</span></span></div>
+        <div class="ana-row"><span class="ana-key">Relative Humidity</span><span class="ana-val" id="aMetHum">—<span class="u">%</span></span></div>
+        <div class="ana-row"><span class="ana-key">Pressure</span><span class="ana-val" id="aMetPress">—<span class="u">hPa</span></span></div>
+        <div class="ana-row"><span class="ana-key">Cloud Cover</span><span class="ana-val" id="aMetCloud">—<span class="u">%</span></span></div>
+        <div class="ana-row"><span class="ana-key">UV Index</span><span class="ana-val" id="aMetUV">—</span></div>
+        <div class="ana-row"><span class="ana-key">Location</span><span class="ana-val" id="aLocName" style="font-size:0.58rem;">—</span></div>
+        <div class="ana-row"><span class="ana-key">Timestamp</span><span class="ana-val" id="aTimestamp" style="font-size:0.52rem;">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIGNAL QUALITY TABLE -->
+  <div class="section-rule">
+    <div class="section-rule-label">Detailed Signal Quality</div>
+    <div class="section-rule-line"></div>
+  </div>
+
+  <div class="quality-section">
+    <div class="panel-header">
+      <div class="panel-title">Satellite Signal Table</div>
+      <div class="panel-subtitle">All tracked PRNs</div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="q-table" id="qTable">
+        <thead>
+          <tr>
+            <th>PRN</th>
+            <th>Elevation</th>
+            <th>Azimuth</th>
+            <th>Dist. (km)</th>
+            <th>Atm. Path</th>
+            <th>Total Delay</th>
+            <th>Wet Delay</th>
+            <th>SNR (dBHz)</th>
+            <th>GPS Hum. (%)</th>
+            <th>Quality</th>
+          </tr>
+        </thead>
+        <tbody id="qTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+const D2R = Math.PI / 180;
+const worker = new Worker('./rinex-worker.js');
+let _epochCount   = 0;
+let _playing      = false;
+let _playInterval = null;
+let _currentEpoch = 0;
+let _pendingEpoch = false;
+let _mainShown    = false;
+
+const SYS_COLOR = { G: '#D4934A', R: '#3DBF7A', E: '#E8B84B', C: '#8B6FD4' };
+
+worker.onmessage = (e) => {
+  switch (e.data.type) {
+    case 'pong':
+      worker.postMessage({ type: 'index', url: '2026-04-09_00-00-00_GNSS-1.26O' });
+      break;
+    case 'progress':
+      document.getElementById('loadStep').textContent = e.data.msg;
+      if (e.data.pct !== undefined)
+        document.getElementById('loadBar').style.width = e.data.pct + '%';
+      break;
+    case 'error':
+      showErr(e.data.msg);
+      break;
+    case 'indexed':
+      onIndexed(e.data);
+      break;
+    case 'epoch':
+      _pendingEpoch = false;
+      onEpochData(e.data);
+      break;
+  }
+};
+
+function onIndexed(data) {
+  _epochCount = data.epochCount;
+  _epochTimes = new Array(_epochCount).fill(null);
+  _epochTimes[0] = data.firstTime;
+  _epochTimes[_epochCount - 1] = data.lastTime;
+
+  const slider = document.getElementById('epochSlider');
+  slider.max   = _epochCount - 1;
+  slider.value = 0;
+  _updateSliderUI(0);
+
+  const fmt = (iso) => new Date(iso).toUTCString().replace(' GMT','').slice(5);
+  document.getElementById('sliderStart').textContent  = fmt(data.firstTime);
+  document.getElementById('sliderEnd').textContent    = fmt(data.lastTime);
+  document.getElementById('epochCounter').textContent = 'Epoch 1 / ' + _epochCount;
+
+  const llh = data.llh;
+  const latS = Math.abs(llh.lat).toFixed(5) + '° ' + (llh.lat >= 0 ? 'N' : 'S');
+  const lonS = Math.abs(llh.lon).toFixed(5) + '° ' + (llh.lon >= 0 ? 'E' : 'W');
+  document.getElementById('hdrCoords').textContent = latS + '  ' + lonS;
+  document.getElementById('hdrAlt').textContent    = 'Altitude: ' + Math.round(llh.alt) + ' m';
+  document.getElementById('hdrAcc').textContent    = 'RINEX 3.03 · ' + _epochCount + ' epochs';
+
+  document.getElementById('loadStep').textContent = _epochCount + ' epochs indexed. Loading first epoch…';
+  worker.postMessage({ type: 'epoch', idx: 0 });
+}
+
+function onEpochData(data) {
+  if (!_mainShown) {
+    _mainShown = true;
+    show('mainScreen');
+    animateIn();
+  }
+
+  const t = new Date(data.time);
+  const pad = (n) => String(n).padStart(2,'0');
+  const timeStr =
+    t.getUTCFullYear() + '-' + pad(t.getUTCMonth()+1) + '-' + pad(t.getUTCDate()) + ' ' +
+    pad(t.getUTCHours()) + ':' + pad(t.getUTCMinutes()) + ':' + pad(t.getUTCSeconds()) + ' UTC';
+
+  // Cache epoch time for tooltip
+  if (_epochTimes) _epochTimes[data.epochIdx] = data.time;
+  // Sync slider fill if auto-playing (manual drag already updates in input handler)
+  _updateSliderUI(data.epochIdx);
+  _updateTooltipText(data.epochIdx);
+
+  document.getElementById('epochTime').textContent    = timeStr;
+  document.getElementById('epochCounter').textContent = 'Epoch ' + (data.epochIdx + 1) + ' / ' + _epochCount;
+  document.getElementById('aTimestamp').textContent   = timeStr;
+
+  document.getElementById('sumSats').textContent   = data.sats.length;
+  document.getElementById('sumHumMet').textContent = Math.round(data.met.RH);
+  document.getElementById('sumPWV').textContent    = data.tropo.PWV.toFixed(1);
+  document.getElementById('sumZTD').textContent    = Math.round(data.tropo.ZTD);
+  const avgH = parseFloat(data.summary.avgHumGPS);
+  document.getElementById('sumHumGPS').textContent = isNaN(avgH) ? '—' : avgH.toFixed(1);
+
+  document.getElementById('aZTD').innerHTML   = Math.round(data.tropo.ZTD)        + '<span class="u">mm</span>';
+  document.getElementById('aZHD').innerHTML   = Math.round(data.tropo.ZHD)        + '<span class="u">mm</span>';
+  document.getElementById('aZWD').innerHTML   = Math.round(data.tropo.ZWD)        + '<span class="u">mm</span>';
+  document.getElementById('aPWV').innerHTML   = data.tropo.PWV.toFixed(1)         + '<span class="u">mm</span>';
+  document.getElementById('aPress').innerHTML = Math.round(data.tropo.pressure)   + '<span class="u">hPa</span>';
+  document.getElementById('aTemp').innerHTML  = data.tropo.temp.toFixed(1)        + '<span class="u">°C</span>';
+  document.getElementById('aVapor').innerHTML = data.tropo.vaporPressure.toFixed(2)+ '<span class="u">hPa</span>';
+
+  document.getElementById('aMetTemp').innerHTML  = data.met.T.toFixed(1)      + '<span class="u">°C</span>';
+  document.getElementById('aMetHum').innerHTML   = Math.round(data.met.RH)    + '<span class="u">%</span>';
+  document.getElementById('aMetPress').innerHTML = Math.round(data.met.P)     + '<span class="u">hPa</span>';
+  document.getElementById('aMetCloud').innerHTML = '—';
+  document.getElementById('aMetUV').innerHTML    = '—';
+  document.getElementById('aLocName').textContent = data.llh.lat.toFixed(3) + '°N ' + data.llh.lon.toFixed(3) + '°E';
+
+  renderSkyPlot(data.sats);
+  renderPropDiagram(data.sats);
+  renderSatCards(data.sats);
+  renderQTable(data.sats, data.tropo.ZWD, data.tropo.ZTD);
+
+  setTimeout(() => {
+    document.querySelectorAll('.hum-bar-fill').forEach(bar => {
+      bar.style.width = bar.dataset.pct + '%';
+    });
+  }, 400);
+}
+
+let _sliderDebounce = null;
+
+function _updateSliderUI(idx) {
+  const pct = _epochCount > 1 ? (idx / (_epochCount - 1)) * 100 : 0;
+  document.getElementById('sliderFill').style.width  = pct + '%';
+  document.getElementById('sliderThumb').style.left  = pct + '%';
+  document.getElementById('sliderTooltip').style.left = pct + '%';
+}
+
+function _updateTooltipText(idx) {
+  const slider = document.getElementById('epochSlider');
+  // Use stored epoch times array if available, else show index
+  const tip = document.getElementById('sliderTooltip');
+  if (_epochTimes && _epochTimes[idx]) {
+    const t = new Date(_epochTimes[idx]);
+    const pad = n => String(n).padStart(2,'0');
+    tip.textContent = pad(t.getUTCHours()) + ':' + pad(t.getUTCMinutes()) + ':' + pad(t.getUTCSeconds()) + ' UTC';
+  } else {
+    tip.textContent = 'Epoch ' + (idx + 1);
+  }
+}
+
+let _epochTimes = null; // will be populated when indexed
+
+document.getElementById('epochSlider').addEventListener('input', (e) => {
+  const idx = parseInt(e.target.value);
+  _currentEpoch = idx;
+  _updateSliderUI(idx);
+  _updateTooltipText(idx);
+  clearTimeout(_sliderDebounce);
+  _sliderDebounce = setTimeout(() => {
+    worker.postMessage({ type: 'epoch', idx });
+  }, 200);
+});
+
+// Dragging state for CSS class
+const _sliderWrap = document.getElementById('sliderWrap');
+document.getElementById('epochSlider').addEventListener('mousedown', () => _sliderWrap.classList.add('is-dragging'));
+document.addEventListener('mouseup', () => _sliderWrap.classList.remove('is-dragging'));
+document.getElementById('epochSlider').addEventListener('touchstart', () => _sliderWrap.classList.add('is-dragging'), {passive:true});
+document.addEventListener('touchend', () => _sliderWrap.classList.remove('is-dragging'));
+
+document.getElementById('btnPlay').addEventListener('click', () => {
+  if (_playing) {
+    clearInterval(_playInterval);
+    _playing = false;
+    document.getElementById('btnPlay').classList.remove('is-playing');
+    document.getElementById('btnPlay').setAttribute('aria-label', 'Play');
+  } else {
+    _playing = true;
+    document.getElementById('btnPlay').classList.add('is-playing');
+    document.getElementById('btnPlay').setAttribute('aria-label', 'Pause');
+    _playInterval = setInterval(() => {
+      if (_pendingEpoch) return;
+      _currentEpoch = (_currentEpoch + 1) % _epochCount;
+      document.getElementById('epochSlider').value = _currentEpoch;
+      _updateSliderUI(_currentEpoch);
+      _updateTooltipText(_currentEpoch);
+      _pendingEpoch = true;
+      worker.postMessage({ type: 'epoch', idx: _currentEpoch });
+    }, 500);
+  }
+});
+
+document.getElementById('errRetry').addEventListener('click', () => {
+  show('loadScreen');
+  document.getElementById('loadStep').textContent = 'Retrying…';
+  worker.postMessage({ type: 'ping' });
+});
+
+function show(id) {
+  ['loadScreen','errScreen','mainScreen'].forEach(s => {
+    document.getElementById(s).style.display = 'none';
+  });
+  const t = document.getElementById(id);
+  t.style.display = (id === 'loadScreen' || id === 'errScreen') ? 'flex' : 'block';
+}
+
+function showErr(msg) {
+  clearInterval(_playInterval);
+  clearTimeout(_sliderDebounce);
+  _playing = false;
+  _pendingEpoch = false;
+  document.getElementById('btnPlay').classList.remove('is-playing');
+  document.getElementById('btnPlay').setAttribute('aria-label', 'Play');
+  document.getElementById('errMsg').textContent = msg;
+  show('errScreen');
+}
+
+function renderSkyPlot(sats) {
+  const svg = document.getElementById('skyPlot');
+  const cx = 150, cy = 150, R = 128;
+  const els = [];
+  const bgColor    = '#13161E';
+  const gridColor  = 'rgba(180,200,255,0.10)';
+  const labelColor = 'rgba(220,210,190,0.40)';
+
+  els.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + (R+12) + '" fill="' + bgColor + '" stroke="rgba(180,200,255,0.12)" stroke-width="1"/>');
+
+  [0,30,60,90].forEach(el => {
+    const r = R * (1 - el / 90);
+    els.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + gridColor + '" stroke-width="0.7"/>');
+    if (el > 0 && el < 90)
+      els.push('<text x="' + (cx+4) + '" y="' + (cy - r + 10) + '" fill="' + labelColor + '" font-size="7" font-family="JetBrains Mono,monospace">' + el + '°</text>');
+  });
+
+  ['N','E','S','W'].forEach((dir, i) => {
+    const ang = i * 90 * D2R;
+    const x1 = cx + (R+6)*Math.sin(ang),  y1 = cy - (R+6)*Math.cos(ang);
+    const x2 = cx + 10*Math.sin(ang),     y2 = cy - 10*Math.cos(ang);
+    els.push('<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + gridColor + '" stroke-width="0.7"/>');
+    const lx = cx + (R+20)*Math.sin(ang), ly = cy - (R+20)*Math.cos(ang) + 4;
+    els.push('<text x="' + lx + '" y="' + ly + '" fill="rgba(220,210,190,0.55)" font-size="9" font-family="JetBrains Mono,monospace" text-anchor="middle">' + dir + '</text>');
+  });
+
+  sats.forEach(s => {
+    const r = R * (1 - s.el / 90);
+    const ang = s.az * D2R;
+    const sx = cx + r * Math.sin(ang), sy = cy - r * Math.cos(ang);
+    const col = SYS_COLOR[s.system] || '#8B5E2A';
+    els.push('<circle cx="' + sx + '" cy="' + sy + '" r="7" fill="' + col + '" fill-opacity="0.15" stroke="' + col + '" stroke-width="1"/>');
+    els.push('<circle cx="' + sx + '" cy="' + sy + '" r="2.5" fill="' + col + '" opacity="0.9"/>');
+    const lx = sx + (sx < cx ? -14 : 8), ly = sy + (sy < cy ? -5 : 12);
+    els.push('<text x="' + lx + '" y="' + ly + '" fill="' + col + '" font-size="7" font-weight="600" font-family="JetBrains Mono,monospace">' + s.system + s.prn + '</text>');
+  });
+
+  svg.innerHTML = els.join('');
+}
+
+function renderPropDiagram(sats) {
+  const svg = document.getElementById('propDiagram');
+  const W = 260, H = 160, groundY = H - 18, tropoY = groundY - 55;
+  const els = [];
+  const lineCol = 'rgba(180,200,255,0.15)';
+  const textCol = 'rgba(220,210,190,0.45)';
+
+  els.push('<rect x="0" y="' + tropoY + '" width="' + W + '" height="' + (groundY-tropoY) + '" fill="rgba(212,147,74,0.06)"/>');
+  els.push('<line x1="0" y1="' + groundY + '" x2="' + W + '" y2="' + groundY + '" stroke="' + lineCol + '" stroke-width="1"/>');
+  els.push('<line x1="0" y1="' + tropoY + '" x2="' + W + '" y2="' + tropoY + '" stroke="' + lineCol + '" stroke-width="0.7" stroke-dasharray="4,4"/>');
+  els.push('<text x="4" y="' + (tropoY-4) + '" fill="' + textCol + '" font-size="7" font-family="JetBrains Mono,monospace">TROPOSPHERE (12 km)</text>');
+
+  const rx = 60, ry = groundY - 2;
+  els.push('<rect x="' + (rx-5) + '" y="' + (ry-8) + '" width="10" height="8" fill="rgba(212,147,74,0.6)" rx="1"/>');
+  els.push('<line x1="' + rx + '" y1="' + (ry-8) + '" x2="' + rx + '" y2="' + (ry-16) + '" stroke="#D4934A" stroke-width="1.5"/>');
+
+  [{el:70,col:'#2E6E4A'},{el:30,col:'#A0721A'},{el:12,col:'#8B2424'}].forEach(ex => {
+    const ang = ex.el * D2R;
+    const exitX = rx + (groundY - tropoY) / Math.tan(ang);
+    const exitY = tropoY;
+    els.push('<line x1="' + rx + '" y1="' + (ry-8) + '" x2="' + Math.min(W-5, exitX) + '" y2="' + Math.max(10, exitY) + '" stroke="' + ex.col + '" stroke-width="1" stroke-dasharray="5,3" opacity="0.7"/>');
+    if (exitX < W-10) els.push('<text x="' + Math.min(W-30,exitX+4) + '" y="' + Math.max(18,exitY-3) + '" fill="' + ex.col + '" font-size="7.5" font-family="JetBrains Mono,monospace">' + ex.el + '°</text>');
+  });
+  svg.innerHTML = els.join('');
+}
+
+function renderSatCards(sats) {
+  const grid = document.getElementById('satGrid');
+  grid.innerHTML = '';
+  sats.forEach(s => {
+    const col = SYS_COLOR[s.system] || '#8B5E2A';
+    const sysLabel = s.system === 'G' ? 'GPS' : s.system === 'R' ? 'GLO' : s.system === 'E' ? 'GAL' : 'BDS';
+    const card = document.createElement('div');
+    card.className = 'sat-card ' + s.cls;
+    card.innerHTML =
+      '<div class="sat-prn" style="color:' + col + '">' + s.system + String(s.prn).padStart(2,'0') + '<small>' + sysLabel + '</small></div>' +
+      '<div class="sat-row"><span class="sat-key">Elev</span><span class="sat-val">' + s.el.toFixed(1) + '°</span></div>' +
+      '<div class="sat-row"><span class="sat-key">Azim</span><span class="sat-val">' + s.az.toFixed(1) + '°</span></div>' +
+      '<div class="sat-row"><span class="sat-key">Dist</span><span class="sat-val">' + s.range.toFixed(0) + ' km</span></div>' +
+      '<div class="sat-row"><span class="sat-key">Atm. Path</span><span class="sat-val">' + s.atmosPath.toFixed(1) + ' km</span></div>' +
+      '<div class="sat-row"><span class="sat-key">Map. Factor</span><span class="sat-val">' + s.mappingF.toFixed(2) + '×</span></div>' +
+      '<div class="sat-row"><span class="sat-key">Wet Delay</span><span class="sat-val">' + s.slantWD.toFixed(1) + ' mm</span></div>' +
+      '<div class="sat-row"><span class="sat-key">SNR</span><span class="sat-val">' + s.snr.toFixed(1) + ' dBHz</span></div>' +
+      '<div class="hum-bar-wrap">' +
+        '<div class="hum-bar-head"><span>GPS Humidity</span><span>' + s.humPct.toFixed(1) + '%</span></div>' +
+        '<div class="hum-bar-track"><div class="hum-bar-fill" data-pct="' + s.humPct.toFixed(1) + '" style="background:' + col + ';"></div></div>' +
+      '</div>';
+    grid.appendChild(card);
+  });
+}
+
+function renderQTable(sats) {
+  const tbody = document.getElementById('qTableBody');
+  tbody.innerHTML = '';
+  sats.forEach(s => {
+    const col = SYS_COLOR[s.system] || '#8B5E2A';
+    const qLabel = s.cls === 'high' ? 'High' : s.cls === 'mid' ? 'Medium' : 'Low';
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="td-prn" style="color:' + col + '">' + s.system + String(s.prn).padStart(2,'0') + '</td>' +
+      '<td style="color:' + col + '">' + s.el.toFixed(1) + '°</td>' +
+      '<td>' + s.az.toFixed(1) + '°</td>' +
+      '<td>' + s.range.toFixed(0) + '</td>' +
+      '<td>' + s.atmosPath.toFixed(1) + ' km</td>' +
+      '<td>' + s.slantTD.toFixed(1) + ' mm</td>' +
+      '<td style="color:' + col + '">' + s.slantWD.toFixed(1) + ' mm</td>' +
+      '<td style="color:' + col + '">' + s.snr.toFixed(1) + '</td>' +
+      '<td style="color:' + col + '">' + s.humPct.toFixed(1) + '%</td>' +
+      '<td style="color:' + col + '">' + qLabel + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function animateIn() {
+  const mm = gsap.matchMedia();
+  mm.add('(prefers-reduced-motion: no-preference)', () => {
+    const tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
+    tl.fromTo('.sum-card',        { autoAlpha:0, y:14  }, { autoAlpha:1, y:0, stagger:0.06, duration:0.5 })
+      .fromTo('.sky-wrap',        { autoAlpha:0, x:-20 }, { autoAlpha:1, x:0, duration:0.5 }, '-=0.25')
+      .fromTo('.sats-wrap',       { autoAlpha:0, x:20  }, { autoAlpha:1, x:0, duration:0.5 }, '<')
+      .fromTo('.sat-card',        { autoAlpha:0, y:10  }, { autoAlpha:1, y:0, stagger:{each:0.03,from:'random'}, duration:0.35 }, '-=0.2')
+      .fromTo('.ana-panel',       { autoAlpha:0, y:14  }, { autoAlpha:1, y:0, stagger:0.07, duration:0.45 }, '-=0.15')
+      .fromTo('.quality-section', { autoAlpha:0, y:10  }, { autoAlpha:1, y:0, duration:0.4 }, '-=0.1');
+    return () => {};
+  });
+  mm.add('(prefers-reduced-motion: reduce)', () => {
+    gsap.set('.sum-card,.sky-wrap,.sats-wrap,.ana-panel,.quality-section,.sat-card', { autoAlpha:1, y:0 });
+    return () => {};
+  });
+}
+
+show('loadScreen');
+document.getElementById('loadStep').textContent = 'Starting RINEX worker…';
+worker.postMessage({ type: 'ping' });
+</script>
+</body>
+</html>
