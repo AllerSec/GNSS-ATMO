@@ -656,6 +656,9 @@
       height: 100%; width: 0;
       transition: width 1.4s cubic-bezier(.4,0,.2,1);
     }
+    .is-playing .hum-bar-fill {
+      transition: none;
+    }
 
     /* ── ANALYSIS PANELS ────────────────────────────────────── */
     .analysis-row {
@@ -773,31 +776,31 @@
     <span class="load-pct-sym">%</span>
   </div>
   <div id="loadProgress"><div id="loadBar"></div></div>
-  <div class="load-step" id="loadStep">Iniciando motor RINEX…</div>
+  <div class="load-step" id="loadStep">Starting RINEX engine…</div>
   <div class="load-phases">
     <div class="load-phase" id="phase0">
       <div class="phase-dot"></div>
-      <span class="phase-label">Descargando archivo RINEX</span>
+      <span class="phase-label">Downloading RINEX file</span>
       <span class="phase-pct" data-pct=""></span>
     </div>
     <div class="load-phase" id="phase1">
       <div class="phase-dot"></div>
-      <span class="phase-label">Descomprimiendo datos</span>
+      <span class="phase-label">Decompressing data</span>
       <span class="phase-pct" data-pct=""></span>
     </div>
     <div class="load-phase" id="phase2">
       <div class="phase-dot"></div>
-      <span class="phase-label">Parseando cabecera RINEX</span>
+      <span class="phase-label">Parsing RINEX header</span>
       <span class="phase-pct" data-pct=""></span>
     </div>
     <div class="load-phase" id="phase3">
       <div class="phase-dot"></div>
-      <span class="phase-label">Construyendo índice de épocas</span>
+      <span class="phase-label">Building epoch index</span>
       <span class="phase-pct" data-pct=""></span>
     </div>
     <div class="load-phase" id="phase4">
       <div class="phase-dot"></div>
-      <span class="phase-label">Cargando primera época</span>
+      <span class="phase-label">Loading first epoch</span>
       <span class="phase-pct" data-pct=""></span>
     </div>
   </div>
@@ -1030,11 +1033,11 @@ const SYS_COLOR = { G: '#D4934A', R: '#3DBF7A', E: '#E8B84B', C: '#8B6FD4' };
 
 // pct ranges: 0=init, 0-20=download, 20-30=decompress, 30-50=header, 50-95=index, 95-100=first epoch
 const _phaseRanges = [
-  { id: 'phase0', from: 0,  to: 20  },  // Descargando
-  { id: 'phase1', from: 20, to: 30  },  // Descomprimiendo
-  { id: 'phase2', from: 30, to: 50  },  // Cabecera
-  { id: 'phase3', from: 50, to: 95  },  // Índice épocas
-  { id: 'phase4', from: 95, to: 100 },  // Primera época
+  { id: 'phase0', from: 0,  to: 20  },
+  { id: 'phase1', from: 20, to: 30  },
+  { id: 'phase2', from: 30, to: 50  },
+  { id: 'phase3', from: 50, to: 95  },
+  { id: 'phase4', from: 95, to: 100 },
 ];
 
 function _onLoadProgress(msg, pct) {
@@ -1104,7 +1107,7 @@ function onIndexed(data) {
   document.getElementById('hdrAlt').textContent    = 'Altitude: ' + Math.round(llh.alt) + ' m';
   document.getElementById('hdrAcc').textContent    = 'RINEX 3.03 · ' + _epochCount + ' epochs';
 
-  _onLoadProgress(_epochCount + ' épocas indexadas. Cargando primera época…', 96);
+  _onLoadProgress(_epochCount + ' epochs indexed. Loading first epoch…', 96);
   worker.postMessage({ type: 'epoch', idx: 0 });
 }
 
@@ -1213,10 +1216,12 @@ document.getElementById('btnPlay').addEventListener('click', () => {
     _playing = false;
     document.getElementById('btnPlay').classList.remove('is-playing');
     document.getElementById('btnPlay').setAttribute('aria-label', 'Play');
+    document.body.classList.remove('is-playing');
   } else {
     _playing = true;
     document.getElementById('btnPlay').classList.add('is-playing');
     document.getElementById('btnPlay').setAttribute('aria-label', 'Pause');
+    document.body.classList.add('is-playing');
     _startPlayInterval();
   }
 });
@@ -1256,7 +1261,7 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
   show('loadScreen');
-  document.getElementById('loadStep').textContent = 'Leyendo archivo…';
+  document.getElementById('loadStep').textContent = 'Reading file…';
   const reader = new FileReader();
   reader.onload = (ev) => {
     worker.postMessage({ type: 'index', text: ev.target.result, filename: file.name });

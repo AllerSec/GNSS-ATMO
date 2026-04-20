@@ -328,9 +328,9 @@ self.onmessage = async function(e) {
       let text;
       if (e.data.text) {
         text = e.data.text;
-        self.postMessage({ type: 'progress', msg: 'Archivo cargado localmente…', pct: 30 });
+        self.postMessage({ type: 'progress', msg: 'File loaded locally…', pct: 30 });
       } else {
-        self.postMessage({ type: 'progress', msg: 'Descargando archivo RINEX…', pct: 0 });
+        self.postMessage({ type: 'progress', msg: 'Downloading RINEX file…', pct: 0 });
         const resp = await fetch(e.data.url);
         if (!resp.ok) {
           self.postMessage({ type: 'error', msg: 'No se pudo cargar el archivo RINEX: ' + resp.status });
@@ -349,9 +349,9 @@ self.onmessage = async function(e) {
             rawChunks.push(value);
             received += value.length;
             const dlPct = totalBytes > 0 ? Math.round(18 * received / totalBytes) : 10;
-            self.postMessage({ type: 'progress', msg: `Descargando… ${totalBytes > 0 ? Math.round(100*received/totalBytes) + '%' : Math.round(received/1024/1024)+'MB'}`, pct: dlPct });
+            self.postMessage({ type: 'progress', msg: `Downloading… ${totalBytes > 0 ? Math.round(100*received/totalBytes) + '%' : Math.round(received/1024/1024)+' MB'}`, pct: dlPct });
           }
-          self.postMessage({ type: 'progress', msg: 'Descomprimiendo datos RINEX…', pct: 20 });
+          self.postMessage({ type: 'progress', msg: 'Decompressing RINEX data…', pct: 20 });
           const rawBlob = new Blob(rawChunks);
           const rawStream = rawBlob.stream();
           const ds = new DecompressionStream('gzip');
@@ -368,16 +368,16 @@ self.onmessage = async function(e) {
         } else {
           text = await resp.text();
         }
-        self.postMessage({ type: 'progress', msg: 'Datos cargados. Leyendo estructura…', pct: 30 });
+        self.postMessage({ type: 'progress', msg: 'Data loaded. Reading structure…', pct: 30 });
       }
 
-      self.postMessage({ type: 'progress', msg: 'Parseando cabecera RINEX…', pct: 45 });
+      self.postMessage({ type: 'progress', msg: 'Parsing RINEX header…', pct: 45 });
       _lines  = text.split('\n');
       _header = parseHeader(_lines);
 
-      self.postMessage({ type: 'progress', msg: 'Construyendo índice de épocas…', pct: 55 });
+      self.postMessage({ type: 'progress', msg: 'Building epoch index…', pct: 55 });
       _epochIndex = buildEpochIndex(_lines, _header.headerEndIndex, (pct) => {
-        self.postMessage({ type: 'progress', msg: `Indexando épocas… (${pct}%)`, pct });
+        self.postMessage({ type: 'progress', msg: `Indexing epochs… (${pct}%)`, pct });
       });
 
       if (_epochIndex.length === 0) {
