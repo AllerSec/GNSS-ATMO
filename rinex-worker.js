@@ -142,8 +142,10 @@ function buildEpochIndex(lines, startIdx, onProgress) {
       const mn  = parseInt(L.slice(16, 18));
       const sec = parseFloat(L.slice(19, 29));
       const numSats = parseInt(L.slice(32, 35));
-      if (isNaN(yr) || isNaN(numSats)) continue;
-      const time = new Date(Date.UTC(yr, mo, dy, hr, mn, Math.floor(sec)));
+      if (isNaN(yr) || isNaN(mo) || isNaN(dy) || isNaN(hr) || isNaN(mn) || isNaN(sec) || isNaN(numSats)) continue;
+      const secFloor = Math.floor(sec);
+      const time = new Date(Date.UTC(yr, mo, dy, hr, mn, secFloor));
+      if (isNaN(time.getTime())) continue;
       index.push({ lineIdx: i, time, numSats });
       if (onProgress && index.length % 5000 === 0) {
         const pct = 60 + Math.round(35 * (i - startIdx) / total);
@@ -334,19 +336,20 @@ self.onmessage = async function(e) {
           self.postMessage({ type: 'error', msg: 'No se pudo cargar el archivo RINEX: ' + resp.status });
           return;
         }
-        self.postMessage({ type: 'progress', msg: 'Descomprimiendo…', pct: 20 });
-        const isGzip = e.data.url.endsWith('.gz');
+        const isGzip = e.data.url.endsWith('.gz') || e.data.url.endsWith('.bin');
         if (isGzip) {
+          self.postMessage({ type: 'progress', msg: 'Descomprimiendo…', pct: 20 });
           const ds = new DecompressionStream('gzip');
           const decompressed = resp.body.pipeThrough(ds);
           const reader = decompressed.getReader();
-          const chunks = [];
+          const decoder = new TextDecoder('utf-8');
+          let result = '';
           while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
-            chunks.push(value);
+            if (done) { result += decoder.decode(); break; }
+            result += decoder.decode(value, { stream: true });
           }
-          text = new TextDecoder().decode(await new Blob(chunks).arrayBuffer());
+          text = result;
         } else {
           text = await resp.text();
         }
