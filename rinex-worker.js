@@ -334,8 +334,23 @@ self.onmessage = async function(e) {
           self.postMessage({ type: 'error', msg: 'No se pudo cargar el archivo RINEX: ' + resp.status });
           return;
         }
+        self.postMessage({ type: 'progress', msg: 'Descomprimiendo…', pct: 20 });
+        const isGzip = e.data.url.endsWith('.gz');
+        if (isGzip) {
+          const ds = new DecompressionStream('gzip');
+          const decompressed = resp.body.pipeThrough(ds);
+          const reader = decompressed.getReader();
+          const chunks = [];
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+          }
+          text = new TextDecoder().decode(await new Blob(chunks).arrayBuffer());
+        } else {
+          text = await resp.text();
+        }
         self.postMessage({ type: 'progress', msg: 'Leyendo texto…', pct: 30 });
-        text = await resp.text();
       }
 
       self.postMessage({ type: 'progress', msg: 'Parseando cabecera…', pct: 50 });

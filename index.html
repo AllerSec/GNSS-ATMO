@@ -937,7 +937,7 @@ const SYS_COLOR = { G: '#D4934A', R: '#3DBF7A', E: '#E8B84B', C: '#8B6FD4' };
 worker.onmessage = (e) => {
   switch (e.data.type) {
     case 'pong':
-      worker.postMessage({ type: 'index', url: 'https://github.com/AllerSec/GNSS-ATMO/releases/download/v1.0/2026-04-09_00-00-00_GNSS-1.26O' });
+      worker.postMessage({ type: 'index', url: '2026-04-09_00-00-00_GNSS-1.26O.gz' });
       break;
     case 'progress':
       document.getElementById('loadStep').textContent = e.data.msg;
