@@ -1161,11 +1161,13 @@ function onEpochData(data) {
   renderSatCards(data.sats);
   renderQTable(data.sats, data.tropo.ZWD, data.tropo.ZTD);
 
-  setTimeout(() => {
-    document.querySelectorAll('.hum-bar-fill').forEach(bar => {
-      bar.style.width = bar.dataset.pct + '%';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.hum-bar-fill').forEach(bar => {
+        bar.style.width = bar.dataset.pct + '%';
+      });
     });
-  }, 400);
+  });
 }
 
 let _sliderDebounce = null;

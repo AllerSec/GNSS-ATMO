@@ -387,7 +387,7 @@ self.onmessage = async function(e) {
       });
 
       if (_epochIndex.length === 0) {
-        self.postMessage({ type: 'error', msg: 'No se encontraron épocas en el archivo RINEX.' });
+        self.postMessage({ type: 'error', msg: 'No epochs found in RINEX file.' });
         return;
       }
 
@@ -403,7 +403,7 @@ self.onmessage = async function(e) {
         obsTypes:   _header.obsTypes,
       });
     } catch (err) {
-      self.postMessage({ type: 'error', msg: 'Error procesando RINEX: ' + err.message });
+      self.postMessage({ type: 'error', msg: 'RINEX processing error: ' + err.message });
     }
     return;
   }
