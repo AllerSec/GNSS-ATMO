@@ -333,29 +333,30 @@ self.onmessage = async function(e) {
         self.postMessage({ type: 'progress', msg: 'Downloading RINEX file…', pct: 0 });
         const resp = await fetch(e.data.url);
         if (!resp.ok) {
-          self.postMessage({ type: 'error', msg: 'No se pudo cargar el archivo RINEX: ' + resp.status });
+          self.postMessage({ type: 'error', msg: 'Failed to fetch RINEX file: HTTP ' + resp.status });
           return;
         }
         const totalBytes = parseInt(resp.headers.get('Content-Length') || '0');
-        const isGzip = e.data.url.endsWith('.gz') || e.data.url.endsWith('.bin');
-        if (isGzip) {
-          // Stream download with progress, then decompress
-          const rawReader = resp.body.getReader();
-          const rawChunks = [];
-          let received = 0;
-          while (true) {
-            const { done, value } = await rawReader.read();
-            if (done) break;
-            rawChunks.push(value);
-            received += value.length;
-            const dlPct = totalBytes > 0 ? Math.round(18 * received / totalBytes) : 10;
-            self.postMessage({ type: 'progress', msg: `Downloading… ${totalBytes > 0 ? Math.round(100*received/totalBytes) + '%' : Math.round(received/1024/1024)+' MB'}`, pct: dlPct });
-          }
+        // Download all bytes with progress
+        const rawReader = resp.body.getReader();
+        const rawChunks = [];
+        let received = 0;
+        while (true) {
+          const { done, value } = await rawReader.read();
+          if (done) break;
+          rawChunks.push(value);
+          received += value.length;
+          const dlPct = totalBytes > 0 ? Math.round(18 * received / totalBytes) : 10;
+          self.postMessage({ type: 'progress', msg: `Downloading… ${totalBytes > 0 ? Math.round(100*received/totalBytes) + '%' : Math.round(received/1024/1024)+' MB'}`, pct: dlPct });
+        }
+        // Detect gzip by magic bytes (1f 8b) — don't trust Content-Encoding or file extension
+        const firstChunk = rawChunks[0];
+        const looksGzip = firstChunk && firstChunk[0] === 0x1F && firstChunk[1] === 0x8B;
+        if (looksGzip) {
           self.postMessage({ type: 'progress', msg: 'Decompressing RINEX data…', pct: 20 });
           const rawBlob = new Blob(rawChunks);
-          const rawStream = rawBlob.stream();
           const ds = new DecompressionStream('gzip');
-          const decompressed = rawStream.pipeThrough(ds);
+          const decompressed = rawBlob.stream().pipeThrough(ds);
           const reader = decompressed.getReader();
           const decoder = new TextDecoder('utf-8');
           let result = '';
@@ -366,13 +367,18 @@ self.onmessage = async function(e) {
           }
           text = result;
         } else {
-          text = await resp.text();
+          // Already plain text (browser auto-decompressed or uncompressed file)
+          const decoder = new TextDecoder('utf-8');
+          let result = '';
+          for (const chunk of rawChunks) result += decoder.decode(chunk, { stream: true });
+          result += decoder.decode();
+          text = result;
         }
         self.postMessage({ type: 'progress', msg: 'Data loaded. Reading structure…', pct: 30 });
       }
 
       self.postMessage({ type: 'progress', msg: 'Parsing RINEX header…', pct: 45 });
-      _lines  = text.split('\n');
+      _lines  = text.split('\n').map(l => l.endsWith('\r') ? l.slice(0, -1) : l);
       _header = parseHeader(_lines);
 
       self.postMessage({ type: 'progress', msg: 'Building epoch index…', pct: 55 });
