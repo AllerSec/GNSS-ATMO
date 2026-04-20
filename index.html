@@ -302,6 +302,34 @@
     }
     .btn-play:active { transform: scale(0.96); }
 
+    .speed-btns {
+      display: flex; gap: 4px; align-items: center; margin-left: 8px;
+    }
+    .btn-speed {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: var(--bg-accent);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 7px;
+      cursor: pointer;
+      transition: color 0.15s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .btn-speed:hover {
+      color: var(--text);
+      border-color: var(--border-hi);
+      background: var(--bg-panel2);
+    }
+    .btn-speed.active {
+      color: var(--accent-light);
+      background: var(--accent-pale);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
     #epochTime {
       font-family: var(--font-mono);
       font-size: 0.82rem;
@@ -741,6 +769,12 @@
       <div class="slider-left">
         <button class="btn-play" id="btnPlay" aria-label="Play"></button>
         <div id="epochTime">—</div>
+        <div class="speed-btns">
+          <button class="btn-speed" id="btnSpeed1" data-speed="1">×1</button>
+          <button class="btn-speed" id="btnSpeed10" data-speed="10">×10</button>
+          <button class="btn-speed" id="btnSpeed50" data-speed="50">×50</button>
+          <button class="btn-speed" id="btnSpeed200" data-speed="200">×200</button>
+        </div>
       </div>
       <div id="epochCounter">Epoch — / —</div>
     </div>
@@ -888,6 +922,7 @@ const worker = new Worker('./rinex-worker.js');
 let _epochCount   = 0;
 let _playing      = false;
 let _playInterval = null;
+let _playSpeed    = 1;
 let _currentEpoch = 0;
 let _pendingEpoch = false;
 let _mainShown    = false;
@@ -1053,17 +1088,34 @@ document.getElementById('btnPlay').addEventListener('click', () => {
     _playing = true;
     document.getElementById('btnPlay').classList.add('is-playing');
     document.getElementById('btnPlay').setAttribute('aria-label', 'Pause');
-    _playInterval = setInterval(() => {
-      if (_pendingEpoch) return;
-      _currentEpoch = (_currentEpoch + 1) % _epochCount;
-      document.getElementById('epochSlider').value = _currentEpoch;
-      _updateSliderUI(_currentEpoch);
-      _updateTooltipText(_currentEpoch);
-      _pendingEpoch = true;
-      worker.postMessage({ type: 'epoch', idx: _currentEpoch });
-    }, 500);
+    _startPlayInterval();
   }
 });
+
+function _startPlayInterval() {
+  clearInterval(_playInterval);
+  const delay = Math.max(16, Math.round(500 / _playSpeed));
+  const step  = _playSpeed >= 50 ? Math.round(_playSpeed / 10) : 1;
+  _playInterval = setInterval(() => {
+    if (_pendingEpoch && _playSpeed < 50) return;
+    _currentEpoch = (_currentEpoch + step) % _epochCount;
+    document.getElementById('epochSlider').value = _currentEpoch;
+    _updateSliderUI(_currentEpoch);
+    _updateTooltipText(_currentEpoch);
+    _pendingEpoch = true;
+    worker.postMessage({ type: 'epoch', idx: _currentEpoch });
+  }, delay);
+}
+
+document.querySelectorAll('.btn-speed').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _playSpeed = parseInt(btn.dataset.speed);
+    document.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (_playing) _startPlayInterval();
+  });
+});
+document.getElementById('btnSpeed1').classList.add('active');
 
 document.getElementById('errRetry').addEventListener('click', () => {
   show('loadScreen');
