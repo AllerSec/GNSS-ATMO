@@ -713,6 +713,11 @@
   <div class="err-icon">!</div>
   <div id="errMsg">Failed to load RINEX data.</div>
   <button class="btn-primary" id="errRetry">Retry</button>
+  <div style="margin-top:12px; font-family:var(--font-mono); font-size:0.75rem; color:var(--text-muted);">— or load a local file —</div>
+  <label class="btn-primary" style="cursor:pointer; margin-top:8px;">
+    Open RINEX file…
+    <input type="file" id="fileInput" accept=".O,.o,.rnx,.RNX,.obs" style="display:none;">
+  </label>
 </div>
 
 <div id="mainScreen" class="screen">
@@ -932,7 +937,7 @@ const SYS_COLOR = { G: '#D4934A', R: '#3DBF7A', E: '#E8B84B', C: '#8B6FD4' };
 worker.onmessage = (e) => {
   switch (e.data.type) {
     case 'pong':
-      worker.postMessage({ type: 'index', url: '2026-04-09_00-00-00_GNSS-1.26O' });
+      worker.postMessage({ type: 'index', url: 'https://github.com/AllerSec/GNSS-ATMO/releases/download/v1.0/2026-04-09_00-00-00_GNSS-1.26O' });
       break;
     case 'progress':
       document.getElementById('loadStep').textContent = e.data.msg;
@@ -1121,6 +1126,18 @@ document.getElementById('errRetry').addEventListener('click', () => {
   show('loadScreen');
   document.getElementById('loadStep').textContent = 'Retrying…';
   worker.postMessage({ type: 'ping' });
+});
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  show('loadScreen');
+  document.getElementById('loadStep').textContent = 'Leyendo archivo…';
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    worker.postMessage({ type: 'index', text: ev.target.result, filename: file.name });
+  };
+  reader.readAsText(file);
 });
 
 function show(id) {

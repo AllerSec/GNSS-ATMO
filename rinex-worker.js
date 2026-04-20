@@ -323,14 +323,20 @@ self.onmessage = async function(e) {
 
   if (e.data.type === 'index') {
     try {
-      self.postMessage({ type: 'progress', msg: 'Descargando archivo RINEX…', pct: 0 });
-      const resp = await fetch(e.data.url);
-      if (!resp.ok) {
-        self.postMessage({ type: 'error', msg: 'No se pudo cargar el archivo RINEX: ' + resp.status });
-        return;
+      let text;
+      if (e.data.text) {
+        text = e.data.text;
+        self.postMessage({ type: 'progress', msg: 'Archivo cargado localmente…', pct: 30 });
+      } else {
+        self.postMessage({ type: 'progress', msg: 'Descargando archivo RINEX…', pct: 0 });
+        const resp = await fetch(e.data.url);
+        if (!resp.ok) {
+          self.postMessage({ type: 'error', msg: 'No se pudo cargar el archivo RINEX: ' + resp.status });
+          return;
+        }
+        self.postMessage({ type: 'progress', msg: 'Leyendo texto…', pct: 30 });
+        text = await resp.text();
       }
-      self.postMessage({ type: 'progress', msg: 'Leyendo texto…', pct: 30 });
-      const text = await resp.text();
 
       self.postMessage({ type: 'progress', msg: 'Parseando cabecera…', pct: 50 });
       _lines  = text.split('\n');
