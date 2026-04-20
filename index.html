@@ -70,7 +70,7 @@
     #loadScreen {
       position: fixed; inset: 0; z-index: 50;
       flex-direction: column; align-items: center; justify-content: center;
-      background: var(--bg); gap: 28px;
+      background: var(--bg); gap: 0;
     }
 
     .load-brand {
@@ -79,52 +79,122 @@
       font-weight: 700;
       color: var(--text);
       letter-spacing: -0.02em;
+      margin-bottom: 6px;
     }
     .load-brand em { font-style: italic; color: var(--accent); }
 
     .load-rule {
       width: 80px; height: 1px;
       background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      margin-bottom: 32px;
     }
 
-    .spinner-wrap { position: relative; width: 56px; height: 56px; }
-    .spinner-ring {
-      position: absolute; inset: 0; border-radius: 50%;
-      border: 1.5px solid var(--border);
-      border-top-color: var(--accent);
-      animation: spin 1.1s linear infinite;
+    /* big percentage display */
+    .load-pct-wrap {
+      position: relative;
+      display: flex; align-items: baseline; gap: 4px;
+      margin-bottom: 20px;
     }
-    .spinner-ring:nth-child(2) {
-      inset: 8px;
-      border-top-color: var(--green);
-      animation-duration: 0.75s;
-      animation-direction: reverse;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .load-txt {
+    .load-pct-num {
       font-family: var(--font-mono);
-      font-size: 0.7rem;
-      color: var(--text-muted);
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
+      font-size: 4.5rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1;
+      transition: color 0.3s;
+      min-width: 3ch;
+      text-align: right;
     }
-    .load-step {
+    .load-pct-sym {
       font-family: var(--font-mono);
-      font-size: 0.68rem;
+      font-size: 1.8rem;
       color: var(--accent);
-      letter-spacing: 0.1em;
+      line-height: 1;
+      align-self: flex-start;
+      padding-top: 6px;
     }
+
+    /* progress bar */
     #loadProgress {
-      width: 240px; height: 1px;
+      width: 340px; height: 4px;
       background: var(--border);
+      border-radius: 2px;
       overflow: hidden;
+      margin-bottom: 16px;
     }
     #loadBar {
       height: 100%; width: 0%;
-      background: var(--accent);
-      transition: width 0.3s ease;
+      background: linear-gradient(90deg, var(--accent), var(--accent-light));
+      border-radius: 2px;
+      transition: width 0.35s cubic-bezier(0.4,0,0.2,1);
     }
+
+    /* current step message */
+    .load-step {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      min-height: 1.2em;
+      text-align: center;
+      margin-bottom: 28px;
+      max-width: 340px;
+      transition: opacity 0.2s;
+    }
+
+    /* phase list */
+    .load-phases {
+      display: flex; flex-direction: column; gap: 8px;
+      width: 340px;
+    }
+    .load-phase {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      transition: color 0.3s;
+    }
+    .load-phase.active  { color: var(--text); }
+    .load-phase.done    { color: var(--green); }
+    .phase-dot {
+      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+      background: var(--border);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .load-phase.active .phase-dot {
+      background: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+      animation: pulseDot 1s ease-in-out infinite;
+    }
+    .load-phase.done .phase-dot {
+      background: var(--green);
+      box-shadow: none;
+    }
+    @keyframes pulseDot {
+      0%, 100% { box-shadow: 0 0 0 3px var(--accent-glow); }
+      50%       { box-shadow: 0 0 0 6px var(--accent-glow); }
+    }
+    .phase-label { flex: 1; }
+    .phase-pct {
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      min-width: 3ch; text-align: right;
+    }
+    .load-phase.done .phase-pct::after { content: '✓'; color: var(--green); }
+    .load-phase:not(.done) .phase-pct::after { content: attr(data-pct); }
+
+    .load-txt {
+      font-family: var(--font-mono);
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .spinner-wrap { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── ERROR SCREEN ────────────────────────────────────────── */
     #errScreen {
@@ -698,14 +768,38 @@
 <div id="loadScreen" class="screen" style="display:flex;">
   <div class="load-brand">GNSS<em>·</em>ATMO</div>
   <div class="load-rule"></div>
-  <div class="spinner-wrap">
-    <div class="spinner-ring"></div>
-    <div class="spinner-ring"></div>
+  <div class="load-pct-wrap">
+    <span class="load-pct-num" id="loadPctNum">0</span>
+    <span class="load-pct-sym">%</span>
   </div>
-  <div class="load-txt">Initializing RINEX Engine</div>
-  <div class="load-step" id="loadStep">Starting RINEX worker…</div>
-  <div id="loadProgress">
-    <div id="loadBar"></div>
+  <div id="loadProgress"><div id="loadBar"></div></div>
+  <div class="load-step" id="loadStep">Iniciando motor RINEX…</div>
+  <div class="load-phases">
+    <div class="load-phase" id="phase0">
+      <div class="phase-dot"></div>
+      <span class="phase-label">Descargando archivo RINEX</span>
+      <span class="phase-pct" data-pct=""></span>
+    </div>
+    <div class="load-phase" id="phase1">
+      <div class="phase-dot"></div>
+      <span class="phase-label">Descomprimiendo datos</span>
+      <span class="phase-pct" data-pct=""></span>
+    </div>
+    <div class="load-phase" id="phase2">
+      <div class="phase-dot"></div>
+      <span class="phase-label">Parseando cabecera RINEX</span>
+      <span class="phase-pct" data-pct=""></span>
+    </div>
+    <div class="load-phase" id="phase3">
+      <div class="phase-dot"></div>
+      <span class="phase-label">Construyendo índice de épocas</span>
+      <span class="phase-pct" data-pct=""></span>
+    </div>
+    <div class="load-phase" id="phase4">
+      <div class="phase-dot"></div>
+      <span class="phase-label">Cargando primera época</span>
+      <span class="phase-pct" data-pct=""></span>
+    </div>
   </div>
 </div>
 
@@ -934,15 +1028,45 @@ let _mainShown    = false;
 
 const SYS_COLOR = { G: '#D4934A', R: '#3DBF7A', E: '#E8B84B', C: '#8B6FD4' };
 
+// pct ranges: 0=init, 0-20=download, 20-30=decompress, 30-50=header, 50-95=index, 95-100=first epoch
+const _phaseRanges = [
+  { id: 'phase0', from: 0,  to: 20  },  // Descargando
+  { id: 'phase1', from: 20, to: 30  },  // Descomprimiendo
+  { id: 'phase2', from: 30, to: 50  },  // Cabecera
+  { id: 'phase3', from: 50, to: 95  },  // Índice épocas
+  { id: 'phase4', from: 95, to: 100 },  // Primera época
+];
+
+function _onLoadProgress(msg, pct) {
+  document.getElementById('loadStep').textContent = msg;
+  if (pct === undefined) return;
+  const p = Math.min(100, Math.max(0, pct));
+  document.getElementById('loadBar').style.width = p + '%';
+  document.getElementById('loadPctNum').textContent = Math.round(p);
+  // color shift: muted → accent → green at 100
+  const numEl = document.getElementById('loadPctNum');
+  if (p >= 100) numEl.style.color = 'var(--green)';
+  else if (p > 0) numEl.style.color = 'var(--text)';
+  // update phases
+  _phaseRanges.forEach(ph => {
+    const el = document.getElementById(ph.id);
+    if (!el) return;
+    el.classList.remove('active', 'done');
+    if (p >= ph.to) {
+      el.classList.add('done');
+    } else if (p >= ph.from) {
+      el.classList.add('active');
+    }
+  });
+}
+
 worker.onmessage = (e) => {
   switch (e.data.type) {
     case 'pong':
       worker.postMessage({ type: 'index', url: '2026-04-09_00-00-00_GNSS-1.26O.bin' });
       break;
     case 'progress':
-      document.getElementById('loadStep').textContent = e.data.msg;
-      if (e.data.pct !== undefined)
-        document.getElementById('loadBar').style.width = e.data.pct + '%';
+      _onLoadProgress(e.data.msg, e.data.pct);
       break;
     case 'error':
       showErr(e.data.msg);
@@ -980,7 +1104,7 @@ function onIndexed(data) {
   document.getElementById('hdrAlt').textContent    = 'Altitude: ' + Math.round(llh.alt) + ' m';
   document.getElementById('hdrAcc').textContent    = 'RINEX 3.03 · ' + _epochCount + ' epochs';
 
-  document.getElementById('loadStep').textContent = _epochCount + ' epochs indexed. Loading first epoch…';
+  _onLoadProgress(_epochCount + ' épocas indexadas. Cargando primera época…', 96);
   worker.postMessage({ type: 'epoch', idx: 0 });
 }
 
