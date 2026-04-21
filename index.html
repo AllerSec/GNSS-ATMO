@@ -717,9 +717,21 @@
     .sat-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+      grid-auto-rows: 1fr;
       gap: 1px;
       background: var(--border);
     }
+    /* Wrapper that locks to exactly 3 row heights + scrolls */
+    .sat-grid-scroll {
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: var(--border);
+      /* height set by JS after first render */
+    }
+    .sat-grid-scroll::-webkit-scrollbar { width: 4px; }
+    .sat-grid-scroll::-webkit-scrollbar-track { background: var(--bg-panel); }
+    .sat-grid-scroll::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+    .sat-grid-scroll::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
     .sat-card {
       background: var(--bg-panel);
@@ -1371,7 +1383,9 @@
         <div class="panel-subtitle">Per-satellite analysis</div>
       </div>
       <div class="panel-body" style="padding:0;">
-        <div class="sat-grid" id="satGrid"></div>
+        <div class="sat-grid-scroll">
+          <div class="sat-grid" id="satGrid"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1951,8 +1965,11 @@ function renderPropDiagram(sats) {
   svg.innerHTML = els.join('');
 }
 
+let _satGridHeightLocked = false;
+
 function renderSatCards(sats) {
-  const grid = document.getElementById('satGrid');
+  const grid   = document.getElementById('satGrid');
+  const scroll = grid.parentElement; // .sat-grid-scroll
   grid.innerHTML = '';
   sats.forEach(s => {
     const col = SYS_COLOR[s.system] || '#8B5E2A';
@@ -1974,6 +1991,20 @@ function renderSatCards(sats) {
       '</div>';
     grid.appendChild(card);
   });
+
+  // Lock scroll container to 3-row height after first render
+  if (!_satGridHeightLocked && grid.children.length > 0) {
+    requestAnimationFrame(() => {
+      const firstCard = grid.children[0];
+      if (!firstCard) return;
+      const cardH = firstCard.getBoundingClientRect().height;
+      if (cardH > 0) {
+        // 3 rows + 2 gaps of 1px each
+        scroll.style.maxHeight = (cardH * 3 + 2) + 'px';
+        _satGridHeightLocked = true;
+      }
+    });
+  }
 }
 
 function renderQTable(sats) {
