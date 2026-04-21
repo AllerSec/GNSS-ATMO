@@ -142,8 +142,10 @@ function buildEpochIndex(lines, startIdx, onProgress) {
       const mn  = parseInt(L.slice(16, 18));
       const sec = parseFloat(L.slice(19, 29));
       const numSats = parseInt(L.slice(32, 35));
-      if (isNaN(yr) || isNaN(numSats)) continue;
-      const time = new Date(Date.UTC(yr, mo, dy, hr, mn, Math.floor(sec)));
+      if (isNaN(yr) || isNaN(mo) || isNaN(dy) || isNaN(hr) || isNaN(mn) || isNaN(sec) || isNaN(numSats)) continue;
+      const secFloor = Math.floor(sec);
+      const time = new Date(Date.UTC(yr, mo, dy, hr, mn, secFloor));
+      if (isNaN(time.getTime())) continue;
       index.push({ lineIdx: i, time, numSats });
       if (onProgress && index.length % 5000 === 0) {
         const pct = 60 + Math.round(35 * (i - startIdx) / total);
@@ -268,12 +270,12 @@ function mappingFunc(el_deg) {
   return 1 / Math.sin(Math.max(5, el_deg) * D2R);
 }
 
-function satHumidityPct(ZWD_mm, el_deg) {
-  const slantWet = ZWD_mm * mappingFunc(el_deg);
-  const e_max    = 6.1078 * Math.exp(17.27 * 25 / (25 + 237.3));
-  const ZWD_max  = 0.002277 * (1255 / 298.15 + 0.05) * e_max * 1000;
-  const slantMax = ZWD_max * mappingFunc(Math.max(5, el_deg));
-  return Math.min(100, (slantWet / slantMax) * 100);
+function slantHumidityPct(slantWD_mm, slantWD_max_mm) {
+  // Percentage of this satellite's slant wet delay relative to the worst-case
+  // path in the epoch (lowest-elevation satellite, same met conditions).
+  // slantWD_max is computed once per epoch as ZWD * mappingFunc(5°).
+  if (slantWD_max_mm <= 0) return 0;
+  return Math.min(100, 100 * slantWD_mm / slantWD_max_mm);
 }
 
 // ── EPOCH COMPUTATION ─────────────────────────────────────────
@@ -289,9 +291,11 @@ function computeEpoch(epochIdx) {
   const PWV   = precipitableWater(ZWD, MET.T);
   const e     = vaporPressure(MET.T, MET.RH);
 
+  const slantWD_max = ZWD * mappingFunc(5);
+
   sats.forEach(s => {
     s.slantWD   = ZWD * mappingFunc(s.el);
-    s.humPct    = satHumidityPct(ZWD, s.el);
+    s.humPct    = slantHumidityPct(s.slantWD, slantWD_max);
     s.atmosPath = 12 / Math.sin(Math.max(5, s.el) * D2R);
     s.mappingF  = mappingFunc(s.el);
     s.slantTD   = ZTD * mappingFunc(s.el);
@@ -323,26 +327,69 @@ self.onmessage = async function(e) {
 
   if (e.data.type === 'index') {
     try {
-      self.postMessage({ type: 'progress', msg: 'Descargando archivo RINEX…', pct: 0 });
-      const resp = await fetch(e.data.url);
-      if (!resp.ok) {
-        self.postMessage({ type: 'error', msg: 'No se pudo cargar el archivo RINEX: ' + resp.status });
-        return;
+      let text;
+      if (e.data.text) {
+        text = e.data.text;
+        self.postMessage({ type: 'progress', msg: 'File loaded locally…', pct: 30 });
+      } else {
+        self.postMessage({ type: 'progress', msg: 'Downloading RINEX file…', pct: 0 });
+        const resp = await fetch(e.data.url);
+        if (!resp.ok) {
+          self.postMessage({ type: 'error', msg: 'Failed to fetch RINEX file: HTTP ' + resp.status });
+          return;
+        }
+        const totalBytes = parseInt(resp.headers.get('Content-Length') || '0');
+        // Download all bytes with progress
+        const rawReader = resp.body.getReader();
+        const rawChunks = [];
+        let received = 0;
+        while (true) {
+          const { done, value } = await rawReader.read();
+          if (done) break;
+          rawChunks.push(value);
+          received += value.length;
+          const dlPct = totalBytes > 0 ? Math.round(18 * received / totalBytes) : 10;
+          self.postMessage({ type: 'progress', msg: `Downloading… ${totalBytes > 0 ? Math.round(100*received/totalBytes) + '%' : Math.round(received/1024/1024)+' MB'}`, pct: dlPct });
+        }
+        // Detect gzip by magic bytes (1f 8b) — don't trust Content-Encoding or file extension
+        const firstChunk = rawChunks[0];
+        const looksGzip = firstChunk && firstChunk[0] === 0x1F && firstChunk[1] === 0x8B;
+        if (looksGzip) {
+          self.postMessage({ type: 'progress', msg: 'Decompressing RINEX data…', pct: 20 });
+          const rawBlob = new Blob(rawChunks);
+          const ds = new DecompressionStream('gzip');
+          const decompressed = rawBlob.stream().pipeThrough(ds);
+          const reader = decompressed.getReader();
+          const decoder = new TextDecoder('utf-8');
+          let result = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) { result += decoder.decode(); break; }
+            result += decoder.decode(value, { stream: true });
+          }
+          text = result;
+        } else {
+          // Already plain text (browser auto-decompressed or uncompressed file)
+          const decoder = new TextDecoder('utf-8');
+          let result = '';
+          for (const chunk of rawChunks) result += decoder.decode(chunk, { stream: true });
+          result += decoder.decode();
+          text = result;
+        }
+        self.postMessage({ type: 'progress', msg: 'Data loaded. Reading structure…', pct: 30 });
       }
-      self.postMessage({ type: 'progress', msg: 'Leyendo texto…', pct: 30 });
-      const text = await resp.text();
 
-      self.postMessage({ type: 'progress', msg: 'Parseando cabecera…', pct: 50 });
-      _lines  = text.split('\n');
+      self.postMessage({ type: 'progress', msg: 'Parsing RINEX header…', pct: 45 });
+      _lines  = text.split('\n').map(l => l.endsWith('\r') ? l.slice(0, -1) : l);
       _header = parseHeader(_lines);
 
-      self.postMessage({ type: 'progress', msg: 'Construyendo índice de épocas…', pct: 60 });
+      self.postMessage({ type: 'progress', msg: 'Building epoch index…', pct: 55 });
       _epochIndex = buildEpochIndex(_lines, _header.headerEndIndex, (pct) => {
-        self.postMessage({ type: 'progress', msg: 'Indexando épocas…', pct });
+        self.postMessage({ type: 'progress', msg: `Indexing epochs… (${pct}%)`, pct });
       });
 
       if (_epochIndex.length === 0) {
-        self.postMessage({ type: 'error', msg: 'No se encontraron épocas en el archivo RINEX.' });
+        self.postMessage({ type: 'error', msg: 'No epochs found in RINEX file.' });
         return;
       }
 
@@ -358,7 +405,7 @@ self.onmessage = async function(e) {
         obsTypes:   _header.obsTypes,
       });
     } catch (err) {
-      self.postMessage({ type: 'error', msg: 'Error procesando RINEX: ' + err.message });
+      self.postMessage({ type: 'error', msg: 'RINEX processing error: ' + err.message });
     }
     return;
   }
