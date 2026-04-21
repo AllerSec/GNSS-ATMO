@@ -270,12 +270,12 @@ function mappingFunc(el_deg) {
   return 1 / Math.sin(Math.max(5, el_deg) * D2R);
 }
 
-function satHumidityPct(ZWD_mm, el_deg) {
-  const slantWet = ZWD_mm * mappingFunc(el_deg);
-  const e_max    = 6.1078 * Math.exp(17.27 * 25 / (25 + 237.3));
-  const ZWD_max  = 0.002277 * (1255 / 298.15 + 0.05) * e_max * 1000;
-  const slantMax = ZWD_max * mappingFunc(Math.max(5, el_deg));
-  return Math.min(100, (slantWet / slantMax) * 100);
+function slantHumidityPct(slantWD_mm, slantWD_max_mm) {
+  // Percentage of this satellite's slant wet delay relative to the worst-case
+  // path in the epoch (lowest-elevation satellite, same met conditions).
+  // slantWD_max is computed once per epoch as ZWD * mappingFunc(5°).
+  if (slantWD_max_mm <= 0) return 0;
+  return Math.min(100, 100 * slantWD_mm / slantWD_max_mm);
 }
 
 // ── EPOCH COMPUTATION ─────────────────────────────────────────
@@ -291,9 +291,11 @@ function computeEpoch(epochIdx) {
   const PWV   = precipitableWater(ZWD, MET.T);
   const e     = vaporPressure(MET.T, MET.RH);
 
+  const slantWD_max = ZWD * mappingFunc(5);
+
   sats.forEach(s => {
     s.slantWD   = ZWD * mappingFunc(s.el);
-    s.humPct    = satHumidityPct(ZWD, s.el);
+    s.humPct    = slantHumidityPct(s.slantWD, slantWD_max);
     s.atmosPath = 12 / Math.sin(Math.max(5, s.el) * D2R);
     s.mappingF  = mappingFunc(s.el);
     s.slantTD   = ZTD * mappingFunc(s.el);
