@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@300;400;500;600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <style>
     :root {
       --bg:           #0D0F14;
@@ -578,6 +580,136 @@
     }
     .sky-dot { width: 7px; height: 7px; border-radius: 50%; }
 
+    /* ── SKY HEATMAP CANVAS ─────────────────────────────────── */
+    .sky-canvas-wrap {
+      position: relative;
+      width: 100%;
+    }
+    .sky-canvas-wrap canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      border-radius: 50%;
+    }
+    #skyHeatCanvas {
+      pointer-events: none;
+    }
+    #skyInteractCanvas {
+      pointer-events: all;
+      cursor: crosshair;
+    }
+
+    /* Tooltip for sky plot hover */
+    #skyTooltip {
+      position: fixed;
+      background: rgba(13,15,20,0.96);
+      border: 1px solid var(--border-hi);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      line-height: 1.65;
+      padding: 8px 12px;
+      border-radius: 3px;
+      pointer-events: none;
+      z-index: 9999;
+      white-space: nowrap;
+      display: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    #skyTooltip .tt-prn {
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    #skyTooltip .tt-hum { font-weight: 600; }
+
+    /* ── IPP MAP ─────────────────────────────────────────────── */
+    .map-section-wrap {
+      margin-bottom: 16px;
+    }
+    .map-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+    }
+    .map-panel .panel-header {
+      display: flex; align-items: baseline;
+      justify-content: space-between; gap: 10px;
+      flex-wrap: wrap;
+    }
+    #ippMap {
+      height: 340px;
+      background: #0D0F14;
+    }
+    /* Leaflet dark override */
+    .leaflet-container {
+      background: #0D0F14 !important;
+      font-family: var(--font-mono) !important;
+    }
+    .leaflet-tile-pane { filter: brightness(0.55) saturate(0.5) hue-rotate(200deg); }
+    .leaflet-control-zoom a {
+      background: var(--bg-panel2) !important;
+      color: var(--text) !important;
+      border-color: var(--border-hi) !important;
+      font-family: var(--font-mono) !important;
+    }
+    .leaflet-control-zoom a:hover { background: var(--bg-accent) !important; }
+    .leaflet-control-attribution {
+      background: rgba(13,15,20,0.75) !important;
+      color: var(--text-muted) !important;
+      font-size: 0.55rem !important;
+    }
+    .leaflet-control-attribution a { color: var(--accent) !important; }
+    /* IPP popup */
+    .ipp-popup .leaflet-popup-content-wrapper {
+      background: rgba(13,15,20,0.97);
+      border: 1px solid var(--border-hi);
+      border-radius: 3px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      line-height: 1.7;
+      padding: 0;
+    }
+    .ipp-popup .leaflet-popup-content { margin: 10px 14px; }
+    .ipp-popup .leaflet-popup-tip-container { display: none; }
+    .ipp-popup .pp-prn {
+      font-family: var(--font-display);
+      font-size: 0.88rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    /* map legend */
+    .map-legend {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 18px;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.60rem;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .map-legend-bar {
+      flex: 1; height: 6px; border-radius: 2px;
+      background: linear-gradient(90deg,
+        rgb(41,128,220) 0%,
+        rgb(45,200,190) 25%,
+        rgb(61,191,122) 50%,
+        rgb(232,184,75) 75%,
+        rgb(224,82,82)  100%);
+    }
+    .map-legend-ticks {
+      display: flex; justify-content: space-between;
+      font-size: 0.55rem; margin-top: 2px; color: var(--text-muted);
+    }
+    .map-ipp-note {
+      font-family: var(--font-mono);
+      font-size: 0.60rem;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
     .sats-wrap {
       background: var(--bg-panel);
       border: 1px solid var(--border);
@@ -720,6 +852,126 @@
     .q-table tr:hover td { background: var(--accent-pale); }
     .q-table .td-prn { font-weight: 600; }
 
+    /* ── HUMIDITY EQUATION PANEL ───────────────────────────── */
+    .hum-eq-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      padding: 18px 22px 20px;
+      margin-bottom: 16px;
+    }
+    .hum-eq-title {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+    .hum-eq-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 18px 32px;
+    }
+    .hum-eq-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 12px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+    }
+    .hum-eq-label {
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      color: var(--text-muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    /* typeset formula layout */
+    .hum-eq-expr {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0 6px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--accent-light);
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+    .hum-eq-expr .op {
+      color: var(--text-dim);
+    }
+    /* stacked fraction: numerator over rule over denominator */
+    .hum-frac {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      vertical-align: middle;
+      line-height: 1.15;
+      margin: 0 2px;
+    }
+    .hum-frac .num {
+      font-family: var(--font-mono);
+      font-size: 0.70rem;
+      color: var(--accent-light);
+      border-bottom: 1px solid var(--accent);
+      padding-bottom: 2px;
+      text-align: center;
+    }
+    .hum-frac .den {
+      font-family: var(--font-mono);
+      font-size: 0.70rem;
+      color: var(--accent-light);
+      padding-top: 2px;
+      text-align: center;
+    }
+    .hum-eq-note {
+      font-family: var(--font-mono);
+      font-size: 0.60rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      line-height: 1.5;
+    }
+    /* ── HUMIDITY COLOR SCALE LEGEND ────────────────────────── */
+    .hum-scale-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .hum-scale-label {
+      font-family: var(--font-mono);
+      font-size: 0.58rem;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .hum-scale-bar {
+      flex: 1;
+      height: 8px;
+      border-radius: 2px;
+      background: linear-gradient(90deg,
+        rgb(41,128,220) 0%,
+        rgb(45,200,190) 25%,
+        rgb(61,191,122) 50%,
+        rgb(232,184,75) 75%,
+        rgb(224,82,82)  100%);
+    }
+    .hum-scale-ticks {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
     /* ── BUTTONS ────────────────────────────────────────────── */
     .btn-primary {
       font-family: var(--font-mono);
@@ -755,14 +1007,177 @@
     }
 
     /* ── RESPONSIVE ─────────────────────────────────────────── */
+
+    /* ── TABLET (≤960px) ──────────────────────────────────── */
     @media (max-width: 960px) {
-      .main-grid { grid-template-columns: 1fr; }
-      .analysis-row { grid-template-columns: 1fr 1fr; }
-      .summary-row  { grid-template-columns: repeat(3, 1fr); }
+      .app { padding: 24px 16px 80px; }
+
+      .main-grid     { grid-template-columns: 1fr; }
+      .analysis-row  { grid-template-columns: 1fr 1fr; }
+      .summary-row   { grid-template-columns: repeat(3, 1fr); }
+
+      #ippMap { height: 280px; }
     }
+
+    /* ── MOBILE (≤600px) ──────────────────────────────────── */
     @media (max-width: 600px) {
-      .analysis-row { grid-template-columns: 1fr; }
-      .summary-row  { grid-template-columns: repeat(2, 1fr); }
+      html { font-size: 15px; }
+      .app { padding: 16px 12px 72px; }
+
+      /* Header: stack brand over coords */
+      .header {
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+      }
+      .hdr-right { align-items: flex-start; }
+      .brand { font-size: clamp(1.5rem, 6vw, 2rem); }
+
+      /* Summary: 2-col then 1-col for 5th card */
+      .summary-row {
+        grid-template-columns: repeat(2, 1fr);
+        margin-bottom: 20px;
+      }
+      /* 5th card spans full row */
+      .sum-card:last-child { grid-column: span 2; }
+      .sum-val { font-size: 1.6rem; }
+
+      /* Time slider: stack controls */
+      #timeSlider { padding: 14px 12px 10px; gap: 8px; }
+      .slider-top { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .slider-left { flex-wrap: wrap; gap: 6px 8px; width: 100%; }
+      #epochCounter { font-size: 0.62rem; align-self: flex-end; }
+
+      /* Bigger touch targets */
+      .btn-play {
+        width: 42px; height: 42px;
+        flex-shrink: 0;
+      }
+      .btn-play::before {
+        border-width: 7px 0 7px 13px;
+        margin-left: 3px;
+      }
+      .btn-play::after {
+        width: 3.5px; height: 14px;
+        box-shadow: 6px 0 0 var(--bg);
+      }
+      .btn-speed {
+        font-size: 0.75rem;
+        padding: 6px 10px;
+        min-height: 34px;
+      }
+      #epochTime {
+        font-size: 0.78rem;
+        flex-basis: 100%;  /* push epoch time to its own line within flex-wrap */
+        order: 1;
+      }
+      .speed-btns { order: 0; }
+      .btn-play   { order: -1; }
+      /* Slider labels smaller but readable */
+      .slider-labels { font-size: 0.60rem; }
+
+      /* Map */
+      #ippMap { height: 220px; }
+
+      /* Analysis: single column */
+      .analysis-row { grid-template-columns: 1fr; gap: 10px; }
+
+      /* Satellite cards: min 44vw for 2-per-row */
+      .sat-grid { grid-template-columns: repeat(auto-fill, minmax(min(148px, 44vw), 1fr)); }
+      .sat-card { padding: 12px 10px; }
+      .sat-prn { font-size: 0.92rem; }
+      .sat-key, .sat-val { font-size: 0.68rem; }
+
+      /* Panel headings */
+      .panel-header { padding: 12px 14px 10px; }
+      .panel-title { font-size: 0.85rem; }
+      .ana-rows { padding: 12px 14px; gap: 10px; }
+      .ana-key { font-size: 0.65rem; }
+      .ana-val { font-size: 0.80rem; }
+
+      /* Equations panel: single col, no overflow */
+      .hum-eq-panel { padding: 14px 14px 16px; }
+      .hum-eq-grid { grid-template-columns: 1fr; gap: 12px; }
+      .hum-eq-item { padding: 10px 12px; }
+      .hum-eq-expr {
+        font-size: 0.72rem;
+        flex-wrap: wrap;
+        row-gap: 4px;
+      }
+      .hum-frac .num, .hum-frac .den { font-size: 0.65rem; }
+
+      /* Quality table: smaller font, keep scroll */
+      .q-table { font-size: 0.65rem; }
+      .q-table th, .q-table td { padding: 7px 10px; white-space: nowrap; }
+
+      /* Map legend and epoch note: wrap on narrow */
+      .map-legend { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+      .map-ipp-note { font-size: 0.58rem; width: 100%; }
+      .panel-header.map-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+
+      /* Sky legend: smaller and wrapping */
+      .sky-legend { gap: 10px; margin-top: 8px; }
+      .sky-leg-item { font-size: 0.62rem; }
+
+      /* Prop diagram: smaller viewbox */
+      #propDiagram { margin-top: 6px; }
+
+      /* Load screen: fluid widths */
+      #loadProgress { width: min(340px, calc(100vw - 48px)); }
+      .load-phases  { width: min(340px, calc(100vw - 48px)); }
+      .load-step    { max-width: min(340px, calc(100vw - 48px)); }
+      .load-pct-num { font-size: 3.8rem; }
+
+      /* Section rules */
+      .section-rule { margin: 20px 0 12px; }
+    }
+
+    /* ── VERY SMALL (≤380px) ──────────────────────────────── */
+    @media (max-width: 380px) {
+      .summary-row { grid-template-columns: 1fr 1fr; }
+      .sum-val { font-size: 1.4rem; }
+      .sum-label { font-size: 0.58rem; }
+
+      /* Speed buttons: trim to 2 most useful on tiny screens */
+      #btnSpeed50, #btnSpeed200 { display: none; }
+
+      .sat-grid { grid-template-columns: 1fr; }
+
+      .brand { font-size: 1.4rem; }
+    }
+
+    /* ── TOUCH: increase hit areas universally ────────────── */
+    @media (hover: none) and (pointer: coarse) {
+      .btn-speed { min-height: 36px; padding: 6px 10px; }
+      .btn-play  { width: 44px; height: 44px; }
+
+      /* Slider track easier to grab */
+      .slider-track-wrap { height: 28px; }
+      .slider-track-bg { height: 4px; }
+      .slider-track-wrap:hover .slider-track-bg,
+      .slider-track-wrap.is-dragging .slider-track-bg { height: 6px; }
+
+      /* Thumb always visible on touch */
+      .slider-thumb-dot {
+        opacity: 1 !important;
+        width: 18px !important;
+        height: 18px !important;
+      }
+
+      /* Disable hover-only tooltips on sky plot (touch has no hover) */
+      #skyTooltip { display: none !important; }
+
+      /* Table rows taller for finger tapping */
+      .q-table td, .q-table th { padding: 10px 14px; }
+    }
+
+    /* ── LANDSCAPE PHONE (short viewport) ────────────────── */
+    @media (max-width: 900px) and (max-height: 500px) {
+      #loadScreen { flex-direction: row; flex-wrap: wrap; gap: 12px; padding: 16px; }
+      .load-phases { display: none; }
+      .load-brand  { width: 100%; margin-bottom: 0; }
+      #loadProgress { width: 200px; }
     }
   </style>
 </head>
@@ -862,6 +1277,8 @@
       <div class="sum-label">GPS Mean Humidity</div>
       <div class="sum-val" id="sumHumGPS">—</div>
       <div class="sum-unit">% satellite avg.</div>
+      <div style="margin-top:8px;height:3px;border-radius:2px;background:linear-gradient(90deg,rgb(41,128,220) 0%,rgb(45,200,190) 25%,rgb(61,191,122) 50%,rgb(232,184,75) 75%,rgb(224,82,82) 100%);opacity:0.55"></div>
+      <div style="position:relative;height:0" id="sumHumNeedle"></div>
     </div>
   </div>
 
@@ -870,13 +1287,13 @@
     <div class="slider-top">
       <div class="slider-left">
         <button class="btn-play" id="btnPlay" aria-label="Play"></button>
-        <div id="epochTime">—</div>
         <div class="speed-btns">
           <button class="btn-speed" id="btnSpeed1" data-speed="1">×1</button>
           <button class="btn-speed" id="btnSpeed10" data-speed="10">×10</button>
           <button class="btn-speed" id="btnSpeed50" data-speed="50">×50</button>
           <button class="btn-speed" id="btnSpeed200" data-speed="200">×200</button>
         </div>
+        <div id="epochTime">—</div>
       </div>
       <div id="epochCounter">Epoch — / —</div>
     </div>
@@ -894,9 +1311,36 @@
     </div>
   </div>
 
-  <!-- SKY PLOT + SATELLITES -->
+  <!-- IPP MAP -->
   <div class="section-rule">
     <div class="section-rule-label">Signal Analysis</div>
+    <div class="section-rule-line"></div>
+  </div>
+
+  <div class="map-section-wrap">
+    <div class="map-panel">
+      <div class="panel-header map-header">
+        <div>
+          <div class="panel-title">Ionospheric Pierce Point Map</div>
+          <div class="panel-subtitle">Tropospheric humidity at ~10 km altitude · Click satellite for details</div>
+        </div>
+        <div class="map-ipp-note" id="ippEpochNote">—</div>
+      </div>
+      <div id="ippMap"></div>
+      <div class="map-legend">
+        <span>Humidity</span>
+        <div style="flex:1">
+          <div class="map-legend-bar"></div>
+          <div class="map-legend-ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+        </div>
+        <span>100%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SKY PLOT + SATELLITES -->
+  <div class="section-rule" style="margin-top:8px;">
+    <div class="section-rule-label">Sky Plot &amp; Satellite Cards</div>
     <div class="section-rule-line"></div>
   </div>
 
@@ -907,8 +1351,12 @@
         <div class="panel-subtitle">Azimuth / Elevation</div>
       </div>
       <div class="panel-body">
-        <svg id="skyPlot" viewBox="0 0 300 300"></svg>
-        <div class="sky-legend">
+        <div class="sky-canvas-wrap" style="aspect-ratio:1/1;position:relative;">
+          <canvas id="skyHeatCanvas" width="300" height="300" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></canvas>
+          <svg id="skyPlot" viewBox="0 0 300 300" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></svg>
+          <canvas id="skyInteractCanvas" width="300" height="300" style="position:absolute;top:0;left:0;width:100%;height:100%;background:transparent;"></canvas>
+        </div>
+        <div class="sky-legend" style="margin-top:10px;">
           <div class="sky-leg-item"><div class="sky-dot" style="background:#D4934A;"></div>GPS (G)</div>
           <div class="sky-leg-item"><div class="sky-dot" style="background:#3DBF7A;"></div>GLONASS (R)</div>
           <div class="sky-leg-item"><div class="sky-dot" style="background:#E8B84B;"></div>Galileo (E)</div>
@@ -983,6 +1431,119 @@
     </div>
   </div>
 
+  <!-- HUMIDITY EQUATIONS -->
+  <div class="hum-eq-panel">
+    <div class="hum-eq-title">GPS Humidity — Saastamoinen Model Equations</div>
+    <div class="hum-eq-grid">
+
+      <!-- 1. Vapor Pressure -->
+      <div class="hum-eq-item">
+        <div class="hum-eq-label">Vapor Pressure (Magnus)</div>
+        <div class="hum-eq-expr">
+          <span>e</span>
+          <span class="op">=</span>
+          <span class="hum-frac"><span class="num">RH</span><span class="den">100</span></span>
+          <span class="op">×</span>
+          <span>6.1078</span>
+          <span class="op">×</span>
+          <span>exp</span>
+          <span style="font-size:1.1em">(</span>
+          <span class="hum-frac"><span class="num">17.27·T</span><span class="den">T + 237.3</span></span>
+          <span style="font-size:1.1em">)</span>
+        </div>
+        <div class="hum-eq-note">T in °C &nbsp;·&nbsp; RH in % &nbsp;·&nbsp; e in hPa</div>
+      </div>
+
+      <!-- 2. Zenith Wet Delay -->
+      <div class="hum-eq-item">
+        <div class="hum-eq-label">Zenith Wet Delay (Saastamoinen)</div>
+        <div class="hum-eq-expr">
+          <span>ZWD</span>
+          <span class="op">=</span>
+          <span>0.002277</span>
+          <span class="op">×</span>
+          <span style="font-size:1.1em">(</span>
+          <span class="hum-frac"><span class="num">1255</span><span class="den">T<sub style="font-size:0.8em">K</sub></span></span>
+          <span class="op">+</span>
+          <span>0.05</span>
+          <span style="font-size:1.1em">)</span>
+          <span class="op">×</span>
+          <span>e</span>
+          <span style="color:var(--text-muted)">&nbsp;[mm]</span>
+        </div>
+        <div class="hum-eq-note">T<sub>K</sub> = T + 273.15 K &nbsp;·&nbsp; e = vapor pressure (hPa)</div>
+      </div>
+
+      <!-- 3. Zenith Hydrostatic Delay -->
+      <div class="hum-eq-item">
+        <div class="hum-eq-label">Zenith Hydrostatic Delay</div>
+        <div class="hum-eq-expr">
+          <span>ZHD</span>
+          <span class="op">=</span>
+          <span class="hum-frac">
+            <span class="num">0.002277 · P</span>
+            <span class="den">1 − 0.00266·cos 2φ − 0.00028·h</span>
+          </span>
+          <span style="color:var(--text-muted)">&nbsp;[mm]</span>
+        </div>
+        <div class="hum-eq-note">P in hPa &nbsp;·&nbsp; φ = latitude &nbsp;·&nbsp; h = altitude in km</div>
+      </div>
+
+      <!-- 4. Mapping Function -->
+      <div class="hum-eq-item">
+        <div class="hum-eq-label">Mapping Function</div>
+        <div class="hum-eq-expr">
+          <span>m(ε)</span>
+          <span class="op">=</span>
+          <span class="hum-frac"><span class="num">1</span><span class="den">sin(max(5°, ε))</span></span>
+        </div>
+        <div class="hum-eq-note">ε = satellite elevation angle</div>
+      </div>
+
+      <!-- 5. Precipitable Water Vapor -->
+      <div class="hum-eq-item">
+        <div class="hum-eq-label">Precipitable Water Vapor</div>
+        <div class="hum-eq-expr">
+          <span>PWV</span>
+          <span class="op">=</span>
+          <span>(0.0721 + 0.000268·T<sub style="font-size:0.8em">K</sub>)</span>
+          <span class="op">×</span>
+          <span>ZWD</span>
+          <span style="color:var(--text-muted)">&nbsp;[mm]</span>
+        </div>
+        <div class="hum-eq-note">Converts zenith wet delay to column water vapor</div>
+      </div>
+
+      <!-- 6. GPS Humidity -->
+      <div class="hum-eq-item">
+        <div class="hum-eq-label">GPS Humidity % (per satellite)</div>
+        <div class="hum-eq-expr">
+          <span>H%</span>
+          <span class="op">=</span>
+          <span>min</span>
+          <span style="font-size:1.1em">(</span>
+          <span>100,</span>
+          <span class="hum-frac">
+            <span class="num">ZWD · m(ε)</span>
+            <span class="den">ZWD<sub style="font-size:0.8em">max</sub> · m(5°)</span>
+          </span>
+          <span class="op">×</span>
+          <span>100</span>
+          <span style="font-size:1.1em">)</span>
+        </div>
+        <div class="hum-eq-note">ZWD same for all sats in epoch &nbsp;·&nbsp; m(5°) = horizon reference (worst case)</div>
+      </div>
+
+    </div>
+    <div class="hum-scale-wrap">
+      <span class="hum-scale-label">Humidity color scale</span>
+      <div style="flex:1">
+        <div class="hum-scale-bar"></div>
+        <div class="hum-scale-ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+      </div>
+    </div>
+  </div>
+
   <!-- SIGNAL QUALITY TABLE -->
   <div class="section-rule">
     <div class="section-rule-label">Detailed Signal Quality</div>
@@ -1018,6 +1579,11 @@
 </div>
 </div>
 
+<div id="skyTooltip">
+  <div class="tt-prn" id="ttPrn"></div>
+  <div id="ttLines"></div>
+</div>
+
 <script>
 const D2R = Math.PI / 180;
 const worker = new Worker('./rinex-worker.js');
@@ -1030,6 +1596,27 @@ let _pendingEpoch = false;
 let _mainShown    = false;
 
 const SYS_COLOR = { G: '#D4934A', R: '#3DBF7A', E: '#E8B84B', C: '#8B6FD4' };
+
+// Humidity color scale: 0%→blue  25%→cyan  50%→green  75%→amber  100%→red
+function humColor(pct) {
+  const stops = [
+    [0,   [  41, 128, 220]],
+    [25,  [  45, 200, 190]],
+    [50,  [  61, 191, 122]],
+    [75,  [ 232, 184,  75]],
+    [100, [ 224,  82,  82]],
+  ];
+  const p = Math.max(0, Math.min(100, pct));
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (p >= stops[i][0] && p <= stops[i+1][0]) { lo = stops[i]; hi = stops[i+1]; break; }
+  }
+  const t = (hi[0] === lo[0]) ? 0 : (p - lo[0]) / (hi[0] - lo[0]);
+  const r = Math.round(lo[1][0] + t * (hi[1][0] - lo[1][0]));
+  const g = Math.round(lo[1][1] + t * (hi[1][1] - lo[1][1]));
+  const b = Math.round(lo[1][2] + t * (hi[1][2] - lo[1][2]));
+  return `rgb(${r},${g},${b})`;
+}
 
 // pct ranges: 0=init, 0-20=download, 20-30=decompress, 30-50=header, 50-95=index, 95-100=first epoch
 const _phaseRanges = [
@@ -1139,7 +1726,13 @@ function onEpochData(data) {
   document.getElementById('sumPWV').textContent    = data.tropo.PWV.toFixed(1);
   document.getElementById('sumZTD').textContent    = Math.round(data.tropo.ZTD);
   const avgH = parseFloat(data.summary.avgHumGPS);
-  document.getElementById('sumHumGPS').textContent = isNaN(avgH) ? '—' : avgH.toFixed(1);
+  const sumHumEl = document.getElementById('sumHumGPS');
+  sumHumEl.textContent = isNaN(avgH) ? '—' : avgH.toFixed(1);
+  sumHumEl.style.color = isNaN(avgH) ? '' : humColor(avgH);
+  const needle = document.getElementById('sumHumNeedle');
+  if (needle && !isNaN(avgH)) {
+    needle.innerHTML = '<div style="position:absolute;top:-5px;left:calc(' + avgH.toFixed(1) + '% - 3px);width:6px;height:6px;border-radius:50%;background:' + humColor(avgH) + ';box-shadow:0 0 4px ' + humColor(avgH) + '"></div>';
+  }
 
   document.getElementById('aZTD').innerHTML   = Math.round(data.tropo.ZTD)        + '<span class="u">mm</span>';
   document.getElementById('aZHD').innerHTML   = Math.round(data.tropo.ZHD)        + '<span class="u">mm</span>';
@@ -1156,10 +1749,12 @@ function onEpochData(data) {
   document.getElementById('aMetUV').innerHTML    = '—';
   document.getElementById('aLocName').textContent = data.llh.lat.toFixed(3) + '°N ' + data.llh.lon.toFixed(3) + '°E';
 
+  renderSkyHeatmap(data.sats);
   renderSkyPlot(data.sats);
   renderPropDiagram(data.sats);
   renderSatCards(data.sats);
   renderQTable(data.sats, data.tropo.ZWD, data.tropo.ZTD);
+  updateIPPMap(data.sats, data.llh, timeStr.replace(' UTC',''));
 
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
@@ -1374,8 +1969,8 @@ function renderSatCards(sats) {
       '<div class="sat-row"><span class="sat-key">Wet Delay</span><span class="sat-val">' + s.slantWD.toFixed(1) + ' mm</span></div>' +
       '<div class="sat-row"><span class="sat-key">SNR</span><span class="sat-val">' + s.snr.toFixed(1) + ' dBHz</span></div>' +
       '<div class="hum-bar-wrap">' +
-        '<div class="hum-bar-head"><span>GPS Humidity</span><span>' + s.humPct.toFixed(1) + '%</span></div>' +
-        '<div class="hum-bar-track"><div class="hum-bar-fill" data-pct="' + s.humPct.toFixed(1) + '" style="background:' + col + ';"></div></div>' +
+        '<div class="hum-bar-head"><span>GPS Humidity</span><span style="color:' + humColor(s.humPct) + '">' + s.humPct.toFixed(1) + '%</span></div>' +
+        '<div class="hum-bar-track"><div class="hum-bar-fill" data-pct="' + s.humPct.toFixed(1) + '" style="background:' + humColor(s.humPct) + ';"></div></div>' +
       '</div>';
     grid.appendChild(card);
   });
@@ -1397,7 +1992,7 @@ function renderQTable(sats) {
       '<td>' + s.slantTD.toFixed(1) + ' mm</td>' +
       '<td style="color:' + col + '">' + s.slantWD.toFixed(1) + ' mm</td>' +
       '<td style="color:' + col + '">' + s.snr.toFixed(1) + '</td>' +
-      '<td style="color:' + col + '">' + s.humPct.toFixed(1) + '%</td>' +
+      '<td style="color:' + humColor(s.humPct) + ';font-weight:600">' + s.humPct.toFixed(1) + '%</td>' +
       '<td style="color:' + col + '">' + qLabel + '</td>';
     tbody.appendChild(tr);
   });
@@ -1408,6 +2003,7 @@ function animateIn() {
   mm.add('(prefers-reduced-motion: no-preference)', () => {
     const tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
     tl.fromTo('.sum-card',        { autoAlpha:0, y:14  }, { autoAlpha:1, y:0, stagger:0.06, duration:0.5 })
+      .fromTo('.map-panel',       { autoAlpha:0, y:16  }, { autoAlpha:1, y:0, duration:0.5 }, '-=0.2')
       .fromTo('.sky-wrap',        { autoAlpha:0, x:-20 }, { autoAlpha:1, x:0, duration:0.5 }, '-=0.25')
       .fromTo('.sats-wrap',       { autoAlpha:0, x:20  }, { autoAlpha:1, x:0, duration:0.5 }, '<')
       .fromTo('.sat-card',        { autoAlpha:0, y:10  }, { autoAlpha:1, y:0, stagger:{each:0.03,from:'random'}, duration:0.35 }, '-=0.2')
@@ -1416,8 +2012,274 @@ function animateIn() {
     return () => {};
   });
   mm.add('(prefers-reduced-motion: reduce)', () => {
-    gsap.set('.sum-card,.sky-wrap,.sats-wrap,.ana-panel,.quality-section,.sat-card', { autoAlpha:1, y:0 });
+    gsap.set('.sum-card,.map-panel,.sky-wrap,.sats-wrap,.ana-panel,.quality-section,.sat-card', { autoAlpha:1, y:0 });
     return () => {};
+  });
+}
+
+// ── SKY HEATMAP (IDW on canvas) ───────────────────────────────
+let _skyHeatSats = [];
+
+function renderSkyHeatmap(sats) {
+  _skyHeatSats = sats;
+  const canvas = document.getElementById('skyHeatCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = 300, H = 300;
+  const cx = 150, cy = 150, R = 128;
+  ctx.clearRect(0, 0, W, H);
+
+  if (sats.length === 0) return;
+
+  // Build pixel grid — IDW interpolation
+  const imgData = ctx.createImageData(W, H);
+  const d = imgData.data;
+
+  // Precompute sat positions in canvas space
+  const pts = sats.map(s => {
+    const r = R * (1 - s.el / 90);
+    const ang = s.az * D2R;
+    return { x: cx + r * Math.sin(ang), y: cy - r * Math.cos(ang), h: s.humPct };
+  });
+
+  const p = 2.5; // IDW power
+
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      // Only inside circle
+      const dx = px - cx, dy = py - cy;
+      if (dx * dx + dy * dy > R * R) continue;
+
+      let wSum = 0, vSum = 0;
+      let exact = -1;
+      for (let i = 0; i < pts.length; i++) {
+        const ddx = px - pts[i].x, ddy = py - pts[i].y;
+        const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (dist < 0.5) { exact = pts[i].h; break; }
+        const w = 1 / Math.pow(dist, p);
+        wSum += w;
+        vSum += w * pts[i].h;
+      }
+      const hum = exact >= 0 ? exact : (wSum > 0 ? vSum / wSum : 0);
+
+      // Clamp elevation effect: fade near center (zenith, el→90) = low uncertainty
+      const r = Math.sqrt(dx * dx + dy * dy);
+      const alpha = Math.round(Math.min(1, r / R) * 155 + 30); // brighter near edge
+
+      const col = humColorRGB(hum);
+      const idx = (py * W + px) * 4;
+      d[idx]   = col[0];
+      d[idx+1] = col[1];
+      d[idx+2] = col[2];
+      d[idx+3] = alpha;
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+
+  // Clip to circle
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.restore();
+}
+
+// Returns [r,g,b] for humColor (matches humColor function)
+function humColorRGB(pct) {
+  const stops = [
+    [0,   [  41, 128, 220]],
+    [25,  [  45, 200, 190]],
+    [50,  [  61, 191, 122]],
+    [75,  [ 232, 184,  75]],
+    [100, [ 224,  82,  82]],
+  ];
+  const p2 = Math.max(0, Math.min(100, pct));
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (p2 >= stops[i][0] && p2 <= stops[i+1][0]) { lo = stops[i]; hi = stops[i+1]; break; }
+  }
+  const t = (hi[0] === lo[0]) ? 0 : (p2 - lo[0]) / (hi[0] - lo[0]);
+  return [
+    Math.round(lo[1][0] + t * (hi[1][0] - lo[1][0])),
+    Math.round(lo[1][1] + t * (hi[1][1] - lo[1][1])),
+    Math.round(lo[1][2] + t * (hi[1][2] - lo[1][2])),
+  ];
+}
+
+// Interactive canvas: hover tooltip
+(function() {
+  let _rafPending = false;
+  const interCanvas = document.getElementById('skyInteractCanvas');
+  const tooltip = document.getElementById('skyTooltip');
+  const HOVER_R = 18; // px hit radius
+  const cx = 150, cy = 150, R = 128;
+
+  function satCanvasPos(s) {
+    const r = R * (1 - s.el / 90);
+    const ang = s.az * D2R;
+    return { x: cx + r * Math.sin(ang), y: cy - r * Math.cos(ang) };
+  }
+
+  interCanvas.addEventListener('mousemove', (e) => {
+    if (_rafPending) return;
+    _rafPending = true;
+    requestAnimationFrame(() => {
+      _rafPending = false;
+      const rect = interCanvas.getBoundingClientRect();
+      // Scale from CSS pixels to canvas pixels
+      const scaleX = 300 / rect.width;
+      const scaleY = 300 / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top)  * scaleY;
+
+      // Find nearest satellite within hit radius
+      let best = null, bestDist = HOVER_R;
+      for (const s of _skyHeatSats) {
+        const p2 = satCanvasPos(s);
+        const d = Math.sqrt((mx - p2.x) ** 2 + (my - p2.y) ** 2);
+        if (d < bestDist) { bestDist = d; best = s; }
+      }
+
+      if (best) {
+        const sysName = { G:'GPS', R:'GLONASS', E:'Galileo', C:'BeiDou' }[best.system] || best.system;
+        const col = humColor(best.humPct);
+        document.getElementById('ttPrn').textContent = best.system + String(best.prn).padStart(2,'0') + ' · ' + sysName;
+        document.getElementById('ttPrn').style.color = SYS_COLOR[best.system] || '#fff';
+        document.getElementById('ttLines').innerHTML =
+          '<div>Elevation: <b>' + best.el.toFixed(1) + '°</b></div>' +
+          '<div>Azimuth: <b>' + best.az.toFixed(1) + '°</b></div>' +
+          '<div>Wet Delay: <b>' + best.slantWD.toFixed(1) + ' mm</b></div>' +
+          '<div>Mapping ×: <b>' + best.mappingF.toFixed(2) + '</b></div>' +
+          '<div class="tt-hum" style="color:' + col + '">Humidity: ' + best.humPct.toFixed(1) + '%</div>';
+        tooltip.style.display = 'block';
+        // Position near cursor, avoid viewport edges
+        let tx = e.clientX + 16, ty = e.clientY - 10;
+        const tw = tooltip.offsetWidth || 180, th = tooltip.offsetHeight || 110;
+        if (tx + tw > window.innerWidth - 8)  tx = e.clientX - tw - 16;
+        if (ty + th > window.innerHeight - 8) ty = e.clientY - th - 10;
+        tooltip.style.left = tx + 'px';
+        tooltip.style.top  = ty + 'px';
+      } else {
+        tooltip.style.display = 'none';
+      }
+    });
+  });
+
+  interCanvas.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
+  });
+})();
+
+// ── IPP MAP (Leaflet) ─────────────────────────────────────────
+const IPP_ALT_KM = 10; // tropospheric IPP height
+const EARTH_R_KM = 6371;
+
+// Compute IPP lat/lon for a satellite at given az/el from receiver lat/lon
+function computeIPP(recLat, recLon, azDeg, elDeg) {
+  const el = Math.max(5, elDeg) * D2R;
+  const az = azDeg * D2R;
+  // Earth central angle to IPP
+  const psi = Math.PI / 2 - el - Math.asin(EARTH_R_KM / (EARTH_R_KM + IPP_ALT_KM) * Math.cos(el));
+  const lat1 = recLat * D2R;
+  const lon1 = recLon * D2R;
+  const ippLat = Math.asin(
+    Math.sin(lat1) * Math.cos(psi) + Math.cos(lat1) * Math.sin(psi) * Math.cos(az)
+  );
+  const ippLon = lon1 + Math.atan2(
+    Math.sin(az) * Math.sin(psi) * Math.cos(lat1),
+    Math.cos(psi) - Math.sin(lat1) * Math.sin(ippLat)
+  );
+  return { lat: ippLat / D2R, lon: ippLon / D2R };
+}
+
+let _ippMap = null;
+let _ippMarkers = [];
+let _ippRecMarker = null;
+let _recLLH = null;
+
+function initIPPMap(llh) {
+  if (_ippMap) return;
+  _recLLH = llh;
+  _ippMap = L.map('ippMap', {
+    center: [llh.lat, llh.lon],
+    zoom: 7,
+    zoomControl: true,
+    attributionControl: true,
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(_ippMap);
+
+  // Receiver marker
+  const recIcon = L.divIcon({
+    className: '',
+    html: '<div style="width:12px;height:12px;border-radius:50%;background:#D4934A;border:2px solid #F0B060;box-shadow:0 0 0 4px rgba(212,147,74,0.25);"></div>',
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  });
+  _ippRecMarker = L.marker([llh.lat, llh.lon], { icon: recIcon })
+    .bindPopup('<div style="font-family:var(--font-mono);font-size:0.68rem;color:#E8E2D6;background:rgba(13,15,20,0.97);padding:8px 12px;border:1px solid rgba(180,200,255,0.14);border-radius:3px;"><b style="color:#D4934A;">GNSS Receiver</b><br>' + llh.lat.toFixed(5) + '° N<br>' + llh.lon.toFixed(5) + '° E<br>Alt: ' + Math.round(llh.alt) + ' m</div>', { className: 'ipp-popup' })
+    .addTo(_ippMap);
+}
+
+function updateIPPMap(sats, llh, timeStr) {
+  if (!_ippMap) initIPPMap(llh);
+  _recLLH = llh;
+
+  // Remove old IPP markers
+  _ippMarkers.forEach(m => _ippMap.removeLayer(m));
+  _ippMarkers = [];
+
+  document.getElementById('ippEpochNote').textContent = timeStr + ' UTC · ' + sats.length + ' sats';
+
+  sats.forEach(s => {
+    const ipp = computeIPP(llh.lat, llh.lon, s.az, s.el);
+    const col = humColor(s.humPct);
+    const rgb = humColorRGB(s.humPct);
+    const sysName = { G:'GPS', R:'GLONASS', E:'Galileo', C:'BeiDou' }[s.system] || s.system;
+    const sysCol  = SYS_COLOR[s.system] || '#aaa';
+    const r = Math.max(7, Math.round(8 + s.humPct / 14));  // size scales with humidity
+
+    const icon = L.divIcon({
+      className: '',
+      html: '<div style="width:' + (r*2) + 'px;height:' + (r*2) + 'px;border-radius:50%;' +
+            'background:rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0.82);' +
+            'border:1.5px solid ' + col + ';' +
+            'box-shadow:0 0 0 3px rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0.22);' +
+            'display:flex;align-items:center;justify-content:center;' +
+            'font-family:JetBrains Mono,monospace;font-size:' + Math.max(7, r-3) + 'px;' +
+            'font-weight:700;color:#0D0F14;">' +
+            s.system + String(s.prn).padStart(2,'0') + '</div>',
+      iconSize: [r*2, r*2],
+      iconAnchor: [r, r],
+    });
+
+    // Draw line from receiver to IPP
+    const line = L.polyline([[llh.lat, llh.lon], [ipp.lat, ipp.lon]], {
+      color: col,
+      weight: 1,
+      opacity: 0.35,
+      dashArray: '4,4',
+    }).addTo(_ippMap);
+    _ippMarkers.push(line);
+
+    const popupHtml =
+      '<div class="pp-prn" style="color:' + sysCol + '">' + s.system + String(s.prn).padStart(2,'0') + ' · ' + sysName + '</div>' +
+      '<div>IPP: ' + ipp.lat.toFixed(3) + '° N, ' + ipp.lon.toFixed(3) + '° E</div>' +
+      '<div>Height: ' + IPP_ALT_KM + ' km</div>' +
+      '<div>Elevation: ' + s.el.toFixed(1) + '°</div>' +
+      '<div>Azimuth: ' + s.az.toFixed(1) + '°</div>' +
+      '<div>Wet Delay: ' + s.slantWD.toFixed(1) + ' mm</div>' +
+      '<div>Mapping ×: ' + s.mappingF.toFixed(2) + '</div>' +
+      '<div style="margin-top:4px;font-weight:700;color:' + col + '">Humidity: ' + s.humPct.toFixed(1) + '%</div>';
+
+    const marker = L.marker([ipp.lat, ipp.lon], { icon })
+      .bindPopup(popupHtml, { className: 'ipp-popup', maxWidth: 220 })
+      .addTo(_ippMap);
+    _ippMarkers.push(marker);
   });
 }
 
